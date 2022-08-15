@@ -1,0 +1,12 @@
+train: F:\PASCALVOC\VOC2012\myData_train.txt
+val: F:\PASCALVOC\VOC2012\myData_test.txt
+annot_encode_folder: F:\PASCALVOC\VOC2012\labels
+
+num_labels: 20
+
+labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
+          "bus",    "car",  "cat",   "chair",   "cow",
+          "diningtable",  "dog",  "horse",  "motorbike",  "person",
+          "pottedplant", "sheep",   "sofa", "train", "tvmonitor" ]
+
+input_size: 600
