@@ -33,6 +33,11 @@ def check_anchor_order(m):
         m.anchor_grid[:] = m.anchor_grid.flip(0)
 
 
+def make_divisible(x, divisor):
+    # Returns x evenly divisible by divisor
+    return math.ceil(x / divisor) * divisor
+
+
 def initialize_weights(model):
     for m in model.modules():
         t = type(m)
@@ -43,6 +48,29 @@ def initialize_weights(model):
             m.momentum = 0.03
         elif t in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6]:
             m.inplace = True
+
+
+def model_info(model, verbose=False, img_size=640):
+    # Model information. img_size may be int or list, i.e. img_size=640 or img_size=[640, 320]
+    n_p = sum(x.numel() for x in model.parameters())  # number parameters
+    n_g = sum(x.numel() for x in model.parameters() if x.requires_grad)  # number gradients
+    if verbose:
+        print('%5s %40s %9s %12s %20s %10s %10s' % ('layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
+        for i, (name, p) in enumerate(model.named_parameters()):
+            name = name.replace('module_list.', '')
+            print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
+                  (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
+    try:  # FLOPS
+        from thop import profile
+        stride = max(int(model.stride.max()), 32) if hasattr(model, 'stride') else 32
+        img = torch.zeros((1, model.yaml.get('ch', 3), stride, stride), device=next(model.parameters()).device)  # input
+        flops = profile(deepcopy(model), inputs=(img,), verbose=False)[0] / 1E9 * 2  # stride GFLOPS
+        img_size = img_size if isinstance(img_size, list) else [img_size, img_size]  # expand if int/float
+        fs = ', %.1f GFLOPS' % (flops * img_size[0] / stride * img_size[1] / stride)  # 640x640 GFLOPS
+    except (ImportError, Exception):
+        fs = ''
+
+    logger.info(f"Model Summary: {len(list(model.modules()))} layers, {n_p} parameters, {n_g} gradients{fs}")
 
 
 def time_synchronized():
@@ -283,12 +311,6 @@ class Model(nn.Module):
             self.model = self.model[:-1]  # remove
         return self
 
-    def autoshape(self):  # add autoShape module
-        print('Adding autoShape... ')
-        m = autoShape(self)  # wrap model
-        copy_attr(m, self, include=('yaml', 'nc', 'hyp', 'names', 'stride'), exclude=())  # copy attributes
-        return m
-
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
 
@@ -375,19 +397,13 @@ if __name__ == "__main__":
 
     set_logging()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='yolor-csp-c.yaml', help='model.yaml')
-    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--profile', action='store_true', help='profile model speed')
-
-    opt = parser.parse_args()
-    opt.cfg = check_file(opt.cfg)  # check file
-    device = select_device(opt.device)
+    cfg = check_file(r"..\cfg\\net_cfg\\yolov7.yaml")  # check file
+    device = select_device()
 
     # Create model
-    model = Model(opt.cfg).to(device)
+    model = Model(cfg).to(device)
     model.train()
 
-    if opt.profile:
-        img_test = torch.rand(1, 3, 640, 640).to(device)
-        y = model(img_test, profile=True)
+    img_test = torch.rand(1, 3, 640, 640).to(device)
+    y = model(img_test, profile=True)
+    torch.save(model.state_dict(), r"F:\SaveModels\Yolo\yolov7.pth")
