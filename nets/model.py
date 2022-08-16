@@ -4,22 +4,13 @@ from pathlib import Path
 
 from torch import nn
 import torch.nn.functional as f
-import logging
-import sys
 from nets.common import *
 from nets.detect import Detect
 from nets.iaux_detect import IAuxDetect
 from nets.ibin import IBin
 from nets.idetect import IDetect
 from nets.nms import NMS
-
-try:
-    import thop  # for FLOPS computation
-except ImportError:
-    thop = None
-
-sys.path.append('./')  # to run '$ python *.py' files in subdirectories
-logger = logging.getLogger(__name__)
+import thop
 
 
 def check_anchor_order(m):
@@ -69,8 +60,6 @@ def model_info(model, verbose=False, img_size=640):
         fs = ', %.1f GFLOPS' % (flops * img_size[0] / stride * img_size[1] / stride)  # 640x640 GFLOPS
     except (ImportError, Exception):
         fs = ''
-
-    logger.info(f"Model Summary: {len(list(model.modules()))} layers, {n_p} parameters, {n_g} gradients{fs}")
 
 
 def time_synchronized():
@@ -131,10 +120,8 @@ class Model(nn.Module):
         # Define model
         ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
         if nc and nc != self.yaml['nc']:
-            logger.info(f"Overriding model.yaml nc={self.yaml['nc']} with nc={nc}")
             self.yaml['nc'] = nc  # override yaml value
         if anchors:
-            logger.info(f'Overriding model.yaml anchors with anchors={anchors}')
             self.yaml['anchors'] = round(anchors)  # override yaml value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
@@ -179,7 +166,6 @@ class Model(nn.Module):
         # Init weights, biases
         initialize_weights(self)
         self.info()
-        logger.info('')
 
     def forward(self, x, augment=False, profile=False):
         if augment:
@@ -316,7 +302,6 @@ class Model(nn.Module):
 
 
 def parse_model(d, ch):  # model_dict, input_channels(3)
-    logger.info('\n%3s%18s%3s%10s  %-40s%-30s' % ('', 'from', 'n', 'params', 'module', 'arguments'))
     anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
     na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
     no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
@@ -325,10 +310,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
         m = eval(m) if isinstance(m, str) else m  # eval strings
         for j, a in enumerate(args):
-            try:
-                args[j] = eval(a) if isinstance(a, str) else a  # eval strings
-            except:
-                pass
+            args[j] = eval(a) if isinstance(a, str) else a
 
         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
         if m in [nn.Conv2d, Conv, RobustConv, RobustConv2, dw_conv, GhostConv, RepConv, DownC,
@@ -382,7 +364,6 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
         t = str(m)[8:-2].replace('__main__.', '')  # module type
         np = sum([x.numel() for x in m_.parameters()])  # number params
         m_.i, m_.f, m_.type, m_.np = i, f, t, np  # attach index, 'from' index, type, number params
-        logger.info('%3s%18s%3s%10.0f  %-40s%-30s' % (i, f, n, np, t, args))  # print
         save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
         layers.append(m_)
         if i == 0:
@@ -392,18 +373,17 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
 
 
 if __name__ == "__main__":
-    import argparse
-    from utils.helper import check_file, set_logging, select_device
+    from utils.helper_io import check_file
+    from utils.helper_torch import select_device
 
-    set_logging()
-
-    cfg = check_file(r"..\cfg\\net_cfg\\yolov7.yaml")  # check file
-    device = select_device()
+    _cfg = check_file(r"..\cfg\\net_cfg\\yolov7.yaml")  # check file
+    _device = select_device(device='0')
 
     # Create model
-    model = Model(cfg).to(device)
-    model.train()
+    _model = Model(_cfg).to(_device)
+    _model.train()
 
-    img_test = torch.rand(1, 3, 640, 640).to(device)
-    y = model(img_test, profile=True)
-    torch.save(model.state_dict(), r"F:\SaveModels\Yolo\yolov7.pth")
+    _img = torch.rand(1, 3, 640, 640).to(_device)
+    y1, y2, y3 = _model(_img, profile=True)
+
+    print("y1:\t{}\r\ny2:\t{}\r\ny3:\t{}".format(tuple(y1.shape), tuple(y2.shape), tuple(y3.shape)))

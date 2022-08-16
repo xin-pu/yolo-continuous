@@ -1,6 +1,7 @@
 train: F:\PASCALVOC\VOC2012\myData_train.txt
 val: F:\PASCALVOC\VOC2012\myData_test.txt
 annot_encode_folder: F:\PASCALVOC\VOC2012\labels
+save_file: F:\SaveModels\Yolo\voc_yolov7.pty
 
 num_labels: 20
 
@@ -9,4 +10,4 @@ labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
           "diningtable",  "dog",  "horse",  "motorbike",  "person",
           "pottedplant", "sheep",   "sofa", "train", "tvmonitor" ]
 
-input_size: 600
+input_size: 640
