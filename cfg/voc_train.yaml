@@ -1,7 +1,7 @@
 train: F:\PASCALVOC\VOC2012\myData_train.txt
 val: F:\PASCALVOC\VOC2012\myData_test.txt
 annot_encode_folder: F:\PASCALVOC\VOC2012\labels
-save_file: F:\SaveModels\Yolo\voc_yolov7.pty
+save_dir: F:\SaveModels\Yolo\voc_yolov7.pty
 
 num_labels: 20
 
@@ -10,4 +10,15 @@ labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
           "diningtable",  "dog",  "horse",  "motorbike",  "person",
           "pottedplant", "sheep",   "sofa", "train", "tvmonitor" ]
 
-input_size: 640
+
+
+model_cfg: E:\Object Detect\yolo-continuous\cfg\net_cfg\yolov7.yaml
+epochs: 300
+batch_size: 16
+image_size: [ 640,640 ]
+resume: True
+device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
+single-cls: True  # train multi-class data as single-class
+adam: False # use torch.optim.Adam() optimizer
+workers: 8 # maximum number of dataloader workers
+save_period: 1

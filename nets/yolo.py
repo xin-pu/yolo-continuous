@@ -311,6 +311,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
         m = eval(m) if isinstance(m, str) else m  # eval strings
         for j, a in enumerate(args):
+            # noinspection PyBroadException
             try:
                 args[j] = eval(a) if isinstance(a, str) else a
             except Exception:
