@@ -2,6 +2,7 @@ import time
 from copy import deepcopy
 from pathlib import Path
 
+import torch.nn
 from torch import nn
 import torch.nn.functional as f
 from nets.common import *
@@ -310,7 +311,10 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
         m = eval(m) if isinstance(m, str) else m  # eval strings
         for j, a in enumerate(args):
-            args[j] = eval(a) if isinstance(a, str) else a
+            try:
+                args[j] = eval(a) if isinstance(a, str) else a
+            except Exception:
+                pass
 
         n = max(round(n * gd), 1) if n > 1 else n  # depth gain
         if m in [nn.Conv2d, Conv, RobustConv, RobustConv2, dw_conv, GhostConv, RepConv, DownC,
