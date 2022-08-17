@@ -4,6 +4,12 @@ import torch
 from torch import Tensor
 
 
+class BBoxType(Enum):
+    XYXY = 0
+    XXYY = 2
+    XYWH = 1
+
+
 class CvtFlag(Enum):
     CVT_XXYY_XYXY = 0
     CVT_XXYY_XYWH = 1
