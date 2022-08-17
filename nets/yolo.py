@@ -381,7 +381,7 @@ if __name__ == "__main__":
     from utils.helper_io import check_file
     from utils.helper_torch import select_device
 
-    _cfg = check_file(r"..\cfg\\net_cfg\\yolov7.yaml")  # check file
+    _cfg = check_file(r"../cfg/net\\yolov7.yaml")  # check file
     _device = select_device(device='0')
 
     # Create model
