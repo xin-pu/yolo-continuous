@@ -23,7 +23,7 @@ def check(flag: CvtFlag):
     return True if flag.value in range(6) else False
 
 
-def cvt_bbox(bbox: Tensor, flag: CvtFlag):
+def cvt_bbox(bbox, flag: CvtFlag):
     if not check(flag):
         raise Exception()
     res_bbox = bbox.clone()

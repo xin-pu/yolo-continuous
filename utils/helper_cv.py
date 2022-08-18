@@ -1,4 +1,6 @@
 import cv2
+import numpy as np
+from numpy import ndarray
 from torch import Tensor
 
 import utils.bbox
@@ -15,17 +17,16 @@ def cvt_for_transform(image: Tensor):
 
 def cvt_for_cv(image: Tensor):
     """
-    KeyPoint
-    Transform: [C,H,W]  => Cv2 Image: [H,W,C]
+    KeyPoint Transform: [C,H,W]  => Cv2 Image: [H,W,C]
     :rtype: Tensor
     :param image: Tensor
     """
     return image.permute(1, 2, 0)
 
 
-def show_bbox(image: Tensor, bbox: Tensor, bbox_mode=BBoxType.XYXY):
-    _bbox = bbox.clone()
-    image = image.numpy()
+def show_bbox(image: ndarray, bbox: ndarray, bbox_mode=BBoxType.XYXY):
+    image = np.ascontiguousarray(image)
+    _bbox = bbox
     if bbox_mode == BBoxType.XXYY:
         _bbox = utils.bbox.cvt_bbox(bbox, CvtFlag.CVT_XXYY_XYXY)
     if bbox_mode == BBoxType.XYWH:
@@ -35,4 +36,4 @@ def show_bbox(image: Tensor, bbox: Tensor, bbox_mode=BBoxType.XYXY):
         pt2 = (int(box[2]), int(box[3]))
         cv2.rectangle(image, pt1, pt2, (0, 123, 255), 2)
     cv2.imshow("show", image)
-    cv2.waitKey(2000)
+    cv2.waitKey()
