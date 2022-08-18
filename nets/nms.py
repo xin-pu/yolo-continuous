@@ -3,7 +3,7 @@ import torch
 import torchvision
 from torch import nn
 
-from utils.bbox import xywh2xyxy
+from utils.bbox import cvt_bbox, CvtFlag
 
 
 def box_iou(box1, box2):
@@ -75,7 +75,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
-        box = xywh2xyxy(x[:, :4])
+        box = cvt_bbox(x[:, :4], CvtFlag.CVT_XYWH_XYXY)
 
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
