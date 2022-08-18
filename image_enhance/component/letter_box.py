@@ -1,3 +1,7 @@
+from random import Random
+
+import numpy as np
+import cv2
 from numpy import ndarray
 from torch.nn import Module
 
@@ -5,29 +9,32 @@ from torch.nn import Module
 class LetterBox(Module):
     def __init__(self,
                  new_shape=(640, 640),
-                 scale_fill=False,
-                 scale_up_enable=False,
+                 scale_fill_prob=0.,
+                 scale_up_enable_prob=0.,
                  color=(114, 114, 114), ):
         """
         当模型输入为正方形时直接将长方形图片resize为正方形会使得图片失真，
         通过填充边界(通常是灰色填充)的方式来保持原始图片的长宽比例
         :param new_shape:目标形状
-        :param scale_fill:是否直接拉升
-        :param scale_up_enable:是否可以向上拉升
+        :param scale_fill_prob:是否直接拉升
+        :param scale_up_enable_prob:是否可以向上拉升
         :param color: 填充颜色
         """
         super(LetterBox, self).__init__()
 
         self.new_shape = (new_shape, new_shape) if isinstance(new_shape, int) else new_shape
         self.color = color
-        self.scale_fill = scale_fill
-        self.scale_up_enable = scale_up_enable
+        self.scale_fill_prob = scale_fill_prob
+        self.scale_up_enable_prob = scale_up_enable_prob
 
     def __call__(self, img: ndarray, target_xyxy):
         new_shape = self.new_shape
         color = self.color
-        scale_fill = self.scale_fill
-        scale_up_enable = self.scale_up_enable
+
+        ran = Random()
+
+        scale_fill = ran.random() < self.scale_fill_prob
+        scale_up_enable = ran.random() < self.scale_up_enable_prob
 
         h_original, w_original = img.shape[:2]
         ratio = (self.new_shape[0] / w_original, self.new_shape[1] / h_original)  # 调整后/调整前,width,height

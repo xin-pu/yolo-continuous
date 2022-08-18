@@ -1,12 +1,13 @@
 import numpy as np
 from random import Random
-
 from numpy import ndarray
 from torch.nn import Module
 
 
 class RandomFlip(Module):
-    def __init__(self, flip_lr_prod=0.5, flip_ud_prob=0.5):
+    def __init__(self,
+                 flip_lr_prod=0.5,
+                 flip_ud_prob=0.5):
         """
         随机翻转
         :param flip_lr_prod: 垂直翻转概率
@@ -16,11 +17,11 @@ class RandomFlip(Module):
         self.flip_lr_prod = flip_lr_prod
         self.flip_ud_prob = flip_ud_prob
 
-    def __call__(self, image: ndarray, bbox_xyxy):
+    def __call__(self, image: ndarray, target_xyxy):
         ran = Random()
         h, w = image.shape[0], image.shape[1]
         _image = image
-        _bbox = bbox_xyxy
+        _bbox = target_xyxy
         if ran.random() < self.flip_lr_prod:  # 水平翻转
             _image = np.fliplr(_image)
             x_max = w - _bbox[:, 0]
@@ -47,6 +48,6 @@ if __name__ == "__main__":
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]
     test_bbox = np.asarray([[48, 25, 273, 383], [103, 201, 448, 435]])  # mode=xyxy
 
-    enhanceImage, __bbox = RandomFlip(flip_lr_prod=0.5, flip_ud_prob=0.5)(test_image, test_bbox)  # [H,W,C]
+    enhanceImage, __bbox = RandomFlip(flip_lr_prod=1, flip_ud_prob=1)(test_image, test_bbox)  # [H,W,C]
     print(__bbox)
     show_bbox(enhanceImage, __bbox)

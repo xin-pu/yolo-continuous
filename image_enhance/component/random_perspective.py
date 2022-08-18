@@ -1,4 +1,6 @@
 import math
+import cv2
+import numpy as np
 from random import Random
 
 from numpy import ndarray
@@ -23,7 +25,7 @@ class RandomPerspective(Module):
         self.perspective = perspective
         self.border = border
 
-    def __call__(self, img: ndarray, bbox):
+    def __call__(self, img: ndarray, target_xyxy):
         degrees = self.degrees
         translate = self.translate
         scale = self.scale
@@ -70,10 +72,10 @@ class RandomPerspective(Module):
                 img = cv2.warpAffine(img, matrix[:2], dsize=(width, height), borderValue=(114, 114, 114))
 
         # Transform label coordinates
-        n = len(bbox)
+        n = len(target_xyxy)
         if n:
             xy = np.ones((n * 4, 3))
-            xy[:, :2] = bbox[:, [0, 1, 2, 3, 0, 3, 2, 1]].reshape(n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
+            xy[:, :2] = target_xyxy[:, [0, 1, 2, 3, 0, 3, 2, 1]].reshape(n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
             xy = xy @ matrix.T  # transform
             xy = (xy[:, :2] / xy[:, 2:3] if perspective else xy[:, :2]).reshape(n, 8)  # perspective rescale or affine
 
@@ -87,10 +89,10 @@ class RandomPerspective(Module):
             new[:, [1, 3]] = new[:, [1, 3]].clip(0, height)
 
             # filter candidates
-            i = self.box_candidates(bbox.T * s, new.T, area_thr=0.10)
-            bbox = new[i]
+            i = self.box_candidates(target_xyxy.T * s, new.T, area_thr=0.10)
+            target_xyxy = new[i]
 
-        return img, bbox
+        return img, target_xyxy
 
     @staticmethod
     def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1, eps=1e-16):  # box1(4,n), box2(4,n)

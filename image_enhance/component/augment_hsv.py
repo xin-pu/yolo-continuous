@@ -1,13 +1,15 @@
+import numpy as np
+import cv2
 from numpy import ndarray
 from torch.nn import Module
 
 
-class AugmentHSV(Module):
+class RandomHSV(Module):
     def __init__(self,
                  hgain=0.015,
                  sgain=0.7,
                  vgain=0.4):
-        super(AugmentHSV, self).__init__()
+        super(RandomHSV, self).__init__()
         self.hgain = hgain
         self.sgain = sgain
         self.vgain = vgain
@@ -36,6 +38,6 @@ if __name__ == "__main__":
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]
     test_bbox = np.asarray([[48, 25, 273, 383], [103, 201, 448, 435]])  # mode=xyxy
 
-    enhanceImage, __bbox = AugmentHSV()(test_image, test_bbox)  # [H,W,C]
+    enhanceImage, __bbox = RandomHSV()(test_image, test_bbox)  # [H,W,C]
     print(__bbox)
     show_bbox(enhanceImage, __bbox)
