@@ -9,9 +9,10 @@ class InfiniteDataLoader(DataLoader):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.batch_sampler = RepeatSampler(self.batch_sampler)
+        object.__setattr__(self, 'batch_sampler', RepeatSampler(self.batch_sampler))
         self.iterator = super().__iter__()
 
+    # noinspection PyUnresolvedReferences
     def __len__(self):
         return len(self.batch_sampler.sampler)
 
