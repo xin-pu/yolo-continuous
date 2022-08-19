@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import yaml
 from torch.nn import Module
@@ -13,7 +14,7 @@ class EnhancePackage(Module):
     def __init__(self, target_shape, enhance_cfg):
         super(EnhancePackage, self).__init__()
 
-        cfg = self.get_dataset_cfg(enhance_cfg)
+        cfg = enhance_cfg
         random_perspective = RandomPerspective(cfg["degrees"],
                                                cfg["translate"],
                                                cfg["scale"],
@@ -63,7 +64,7 @@ if __name__ == "__main__":
     test_image_file = r"F:\PASCALVOC\VOC2012\JPEGImages\2007_000733.jpg"
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]
     test_bbox = np.asarray([[48, 25, 273, 383], [103, 201, 448, 435]])  # mode=x1y1x2y2
-
-    enhanceImage, __bbox = EnhancePackage(640, "../cfg/enhance/enhance.yaml")(test_image, test_bbox)  # [C,H,W]
+    cfg = EnhancePackage.get_dataset_cfg("../cfg/enhance/enhance.yaml")
+    enhanceImage, __bbox = EnhancePackage(640, cfg)(test_image, test_bbox)  # [C,H,W]
     print(__bbox)
     show_bbox(enhanceImage, __bbox)

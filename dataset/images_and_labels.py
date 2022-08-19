@@ -2,6 +2,7 @@ import math
 import os
 from contextlib import contextmanager
 
+import cv2
 import numpy as np
 import pandas as pd
 import torch.distributed
@@ -10,6 +11,7 @@ import yaml
 from torch.utils.data import Dataset, DataLoader
 
 from dataset.infinite_dataLoader import InfiniteDataLoader
+from image_enhance.enhance_package import EnhancePackage
 
 
 class ImagesAndLabels(Dataset):
@@ -28,13 +30,28 @@ class ImagesAndLabels(Dataset):
         self.annot_files = self.get_annot_file(self.image_files)
         self.len = len(self.annot_files)
 
+        self.enhance = EnhancePackage(640, enhance_cfg)
+
     def __len__(self):
         return self.len
 
     def __getitem__(self, index):
-        import random
-        s = random.randint(1, 4)
-        return torch.ones(3), 4
+        """
+
+        :param index:
+        :return:
+        img: [C,H,W]
+        tar: (Label, X1,Y1,X2,Y2)
+        """
+        image_file = self.image_files[index]
+        target_file = self.annot_files[index]
+
+        img = cv2.imread(image_file)
+        tar = np.asarray([[1.0, 1.0, 2.0, 2.0]])
+
+        img, tar = self.enhance(img, tar)
+
+        return torch.from_numpy(img), torch.from_numpy(tar)
 
     def __str__(self):
         info = "-" * 20 + type(self).__name__ + "-" * 20 + "\r\n"
@@ -56,18 +73,6 @@ class ImagesAndLabels(Dataset):
             return cfg
 
 
-@contextmanager
-def torch_distributed_zero_first(local_rank: int):
-    """
-    Decorator to make all processes in distributed training wait for each local_master to do something.
-    """
-    if local_rank not in [-1, 0]:
-        torch.distributed.barrier()
-    yield
-    if local_rank == 0:
-        torch.distributed.barrier()
-
-
 if __name__ == "__main__":
     _data_cfg = "../cfg/voc_train.yaml"
     _enhance_cfg = "../cfg/enhance/enhance.yaml"
@@ -78,4 +83,4 @@ if __name__ == "__main__":
     i = 1
     for images, targets in dataloader:
         i += 1
-        print(i)
+        break
