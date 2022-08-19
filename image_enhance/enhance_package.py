@@ -26,8 +26,7 @@ class EnhancePackage(Module):
         random_flip = RandomFlip(cfg["flip_ud"],
                                  cfg["flip_lr"])
         letter_box = LetterBox(target_shape,
-                               cfg["scale_fill"],
-                               cfg["scale_up_enable"])
+                               cfg["scale_fill"])
 
         self.enhance = [random_perspective,
                         random_hsv,
@@ -64,7 +63,7 @@ if __name__ == "__main__":
     test_image_file = r"F:\PASCALVOC\VOC2012\JPEGImages\2007_000733.jpg"
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]
     test_bbox = np.asarray([[48, 25, 273, 383], [103, 201, 448, 435]])  # mode=x1y1x2y2
-    cfg = EnhancePackage.get_dataset_cfg("../cfg/enhance/enhance.yaml")
-    enhanceImage, __bbox = EnhancePackage(640, cfg)(test_image, test_bbox)  # [C,H,W]
+    _cfg = EnhancePackage.get_dataset_cfg("../cfg/enhance/enhance.yaml")
+    enhanceImage, __bbox = EnhancePackage(640, _cfg)(test_image, test_bbox)  # [C,H,W]
     print(__bbox)
     show_bbox(enhanceImage, __bbox)

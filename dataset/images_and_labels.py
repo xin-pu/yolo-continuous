@@ -1,7 +1,5 @@
 import math
 import os
-from contextlib import contextmanager
-
 import cv2
 import numpy as np
 import pandas as pd
@@ -9,6 +7,7 @@ import torch.distributed
 import torch
 import yaml
 from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 
 from dataset.infinite_dataLoader import InfiniteDataLoader
 from image_enhance.enhance_package import EnhancePackage
@@ -50,8 +49,7 @@ class ImagesAndLabels(Dataset):
         tar = np.asarray([[1.0, 1.0, 2.0, 2.0]])
 
         img, tar = self.enhance(img, tar)
-
-        return torch.from_numpy(img), torch.from_numpy(tar)
+        return torch.from_numpy(img).permute(2, 0, 1), torch.from_numpy(tar)
 
     def __str__(self):
         info = "-" * 20 + type(self).__name__ + "-" * 20 + "\r\n"
@@ -81,6 +79,7 @@ if __name__ == "__main__":
     dataset = ImagesAndLabels(_data_cfg, _enhance_cfg)
     dataloader = InfiniteDataLoader(dataset, batch_size=32, shuffle=True)
     i = 1
-    for images, targets in dataloader:
+    pbar = tqdm(dataloader)
+    for images, targets in pbar:
         i += 1
-        break
+    pbar.close()

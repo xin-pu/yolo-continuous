@@ -9,15 +9,13 @@ from torch.nn import Module
 class LetterBox(Module):
     def __init__(self,
                  new_shape=(640, 640),
-                 scale_fill_prob=0.,
-                 scale_up_enable_prob=0.,
+                 scale_fill_prob=0,
                  color=(114, 114, 114), ):
         """
         当模型输入为正方形时直接将长方形图片resize为正方形会使得图片失真，
         通过填充边界(通常是灰色填充)的方式来保持原始图片的长宽比例
         :param new_shape:目标形状
         :param scale_fill_prob:是否直接拉升
-        :param scale_up_enable_prob:是否可以向上拉升
         :param color: 填充颜色
         """
         super(LetterBox, self).__init__()
@@ -25,7 +23,6 @@ class LetterBox(Module):
         self.new_shape = (new_shape, new_shape) if isinstance(new_shape, int) else new_shape
         self.color = color
         self.scale_fill_prob = scale_fill_prob
-        self.scale_up_enable_prob = scale_up_enable_prob
 
     def __call__(self, img: ndarray, target_xyxy):
         new_shape = self.new_shape
@@ -34,26 +31,23 @@ class LetterBox(Module):
         ran = Random()
 
         scale_fill = ran.random() < self.scale_fill_prob
-        scale_up_enable = ran.random() < self.scale_up_enable_prob
 
         h_original, w_original = img.shape[:2]
         ratio = (self.new_shape[0] / w_original, self.new_shape[1] / h_original)  # 调整后/调整前,width,height
         dw, dh = 0, 0  # w,h
-        if scale_fill:  # 直接拉升
+        if scale_fill:  # 任何情况直接拉升
             img = cv2.resize(img, new_shape, interpolation=cv2.INTER_LINEAR)
             ratio = (img.shape[0] / w_original, img.shape[1] / h_original)
+
         else:
             r = min(ratio)
-            if not scale_up_enable:
-                r = min(r, 1.0)
-
             ratio = (r, r)
             shape_resize = (int(round(w_original * r)), int(round(h_original * r)))
             dw, dh = new_shape[0] - shape_resize[0], new_shape[1] - shape_resize[1]
             dw /= 2  # divide padding into 2 sides
             dh /= 2
 
-            if new_shape[::-1] != shape_resize:  # resize
+            if new_shape[::-1] != shape_resize:
                 img = cv2.resize(img, shape_resize, interpolation=cv2.INTER_LINEAR)
             top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
             left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
@@ -74,7 +68,6 @@ if __name__ == "__main__":
 
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]
     test_bbox = np.asarray([[203, 85, 350, 212]])  # mode=xyxy
-
     enhanceImage, __bbox = LetterBox()(test_image, test_bbox)  # [H,W,C]
     print(__bbox)
     show_bbox(enhanceImage, __bbox)
