@@ -1,5 +1,6 @@
 from data_loader import get_dataloader
 from learningrate_scheduler import *
+from losses.compute_loss import ComputeLossOTA
 from nets.yolo import Model
 from optimizer import get_optimizer
 from utils.helper_io import check_file, cvt_cfg
@@ -24,6 +25,10 @@ def train(train_cfg_file):
     # Step 3 DataLoader
     train_dataloader = get_dataloader(train_cfg, True)
     test_dataloader = get_dataloader(train_cfg, False)
+    # Todo
+
+    # Step 4 Loss
+    compute_loss_ota = ComputeLossOTA(net, train_cfg).  #
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 from utils.helper_torch import timer as ti
 from copy import deepcopy
-from datetime import time
-from pathlib import Path
 
+from pathlib import Path
+import time
 import torch.nn
 from torch import nn
 import torch.nn.functional as f
@@ -68,6 +68,7 @@ def time_synchronized():
     # pytorch-accurate time
     if torch.cuda.is_available():
         torch.cuda.synchronize()
+
     return time.time()
 
 
