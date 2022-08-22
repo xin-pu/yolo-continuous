@@ -1,7 +1,10 @@
 from torch import optim, nn
 from torch.nn import Module
 
+from utils.helper_torch import timer
 
+
+@timer
 def get_optimizer(model: Module,
                   cfg):
     """
@@ -81,9 +84,9 @@ def get_optimizer(model: Module,
                 pg0.append(v.rbr_dense.vector)
 
     if cfg['adam']:
-        optimizer = optim.Adam(pg0, lr=cfg['lr0'], betas=(cfg['momentum'], 0.999))  # adjust beta1 to momentum
+        optimizer = optim.Adam(pg0, lr=cfg['lrI'], betas=(cfg['momentum'], 0.999))  # adjust beta1 to momentum
     else:
-        optimizer = optim.SGD(pg0, lr=cfg['lr0'], momentum=cfg['momentum'], nesterov=True)
+        optimizer = optim.SGD(pg0, lr=cfg['lrI'], momentum=cfg['momentum'], nesterov=True)
 
     optimizer.add_param_group({'params': pg1, 'weight_decay': cfg['weight_decay']})  # add pg1 with weight_decay
     optimizer.add_param_group({'params': pg2})  # add pg2 (biases)

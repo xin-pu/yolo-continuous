@@ -11,13 +11,15 @@ labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
           "pottedplant", "sheep",   "sofa", "train", "tvmonitor" ]
 
 adam: False # use torch.optim.Adam() optimizer
-lr0: 0.01  # initial learning rate (SGD=1E-2, Adam=1E-3)
-lrf: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
+decay: Cosine
+lrI: 0.01  # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
 
 
-model_cfg: E:\Object Detect\yolo-continuous\cfg\net_cfg\yolov7.yaml
+model_cfg: E:\Object Detect\yolo-continuous\cfg\net\yolov7.yaml
+enhance_cfg: E:\Object Detect\yolo-continuous\cfg\enhance\enhance.yaml
 epochs: 300
 batch_size: 16
 image_size: 416

@@ -5,6 +5,20 @@ import torch
 from utils.helper_io import git_describe, date_modified
 
 
+# This is for timing
+def timer(func):
+    def func_wrapper(*args, **kwargs):
+        from time import time
+        time_start = time()
+        result = func(*args, **kwargs)
+        time_end = time()
+        time_spend = time_end - time_start
+        print('{0} cost:\t{1:.3f}s'.format(func.__name__, time_spend))
+        return result
+
+    return func_wrapper
+
+
 def select_device(device='', batch_size=None):
     # device = 'cpu' or '0' or '0,1,2,3'
     s = f'YOLOR 🚀 {git_describe() or date_modified()} torch {torch.__version__} '  # string

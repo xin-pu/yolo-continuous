@@ -1,5 +1,6 @@
-import time
+from utils.helper_torch import timer as ti
 from copy import deepcopy
+from datetime import time
 from pathlib import Path
 
 import torch.nn
@@ -107,6 +108,7 @@ def fuse_conv_and_bn(conv, bn):
 
 
 class Model(nn.Module):
+    @ti
     def __init__(self, cfg, ch=3, nc=None, anchors=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         self.traced = False
@@ -372,7 +374,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
 
 if __name__ == "__main__":
     from utils.helper_io import check_file, cvt_cfg
-    from utils.helper_torch import select_device
+    from utils.helper_torch import select_device, timer
 
     _cfg = cvt_cfg(check_file(r"../cfg/net\\yolov7.yaml"))
     _device = select_device(device='0')
