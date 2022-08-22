@@ -1,4 +1,3 @@
-import math
 import os
 import cv2
 import numpy as np
@@ -11,16 +10,15 @@ from tqdm import tqdm
 
 from dataset.infinite_dataLoader import InfiniteDataLoader
 from image_enhance.enhance_package import EnhancePackage
+from utils.helper_io import cvt_cfg
 
 
 class ImagesAndLabels(Dataset):
 
     def __init__(self,
-                 data_cfg_path,
-                 enhance_cfg_path,
+                 data_cfg,
+                 enhance_cfg,
                  train=True):
-        data_cfg = self.get_dataset_cfg(data_cfg_path)
-        enhance_cfg = self.get_dataset_cfg(enhance_cfg_path)
 
         image_index_file = data_cfg["train"] if train else data_cfg["val"]
 
@@ -28,7 +26,7 @@ class ImagesAndLabels(Dataset):
         self.image_files = pd.read_csv(image_index_file, header=None).iloc[:, 0].values
         self.annot_files = self.get_annot_file(self.image_files)
         self.len = len(self.annot_files)
-        self.enhance_option = data_cfg["enhance"]
+        self.enhance_option = data_cfg["enhance"] if train else False
         self.enhance = EnhancePackage(data_cfg["image_size"], enhance_cfg)
 
     def __len__(self):
@@ -72,8 +70,8 @@ class ImagesAndLabels(Dataset):
 
 
 if __name__ == "__main__":
-    _data_cfg = "../cfg/voc_train.yaml"
-    _enhance_cfg = "../cfg/enhance/enhance.yaml"
+    _data_cfg = cvt_cfg("../cfg/voc_train.yaml")
+    _enhance_cfg = cvt_cfg("../cfg/enhance/enhance.yaml")
     rank = 1
 
     dataset = ImagesAndLabels(_data_cfg, _enhance_cfg)
