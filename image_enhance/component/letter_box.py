@@ -9,7 +9,7 @@ from torch.nn import Module
 class LetterBox(Module):
     def __init__(self,
                  new_shape=(640, 640),
-                 scale_fill_prob=0,
+                 scale_fill_prob=1,
                  color=(114, 114, 114), ):
         """
         当模型输入为正方形时直接将长方形图片resize为正方形会使得图片失真，
@@ -68,6 +68,6 @@ if __name__ == "__main__":
 
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]
     test_bbox = np.asarray([[203, 85, 350, 212]])  # mode=xyxy
-    enhanceImage, __bbox = LetterBox()(test_image, test_bbox)  # [H,W,C]
-    print(__bbox)
+    enhanceImage, __bbox = LetterBox(new_shape=(640, 640), scale_fill_prob=0)(test_image, test_bbox)  # [H,W,C]
+    print(enhanceImage.shape)
     show_bbox(enhanceImage, __bbox)

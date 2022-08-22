@@ -15,7 +15,8 @@ labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
 model_cfg: E:\Object Detect\yolo-continuous\cfg\net_cfg\yolov7.yaml
 epochs: 300
 batch_size: 16
-image_size: [ 640,640 ]
+image_size: 416
+enhance: False
 resume: True
 device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
 single-cls: True  # train multi-class data as single-class

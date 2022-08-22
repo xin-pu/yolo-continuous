@@ -28,8 +28,8 @@ class ImagesAndLabels(Dataset):
         self.image_files = pd.read_csv(image_index_file, header=None).iloc[:, 0].values
         self.annot_files = self.get_annot_file(self.image_files)
         self.len = len(self.annot_files)
-
-        self.enhance = EnhancePackage(640, enhance_cfg)
+        self.enhance_option = data_cfg["enhance"]
+        self.enhance = EnhancePackage(data_cfg["image_size"], enhance_cfg)
 
     def __len__(self):
         return self.len
@@ -48,7 +48,7 @@ class ImagesAndLabels(Dataset):
         img = cv2.imread(image_file)
         tar = np.asarray([[1.0, 1.0, 2.0, 2.0]])
 
-        img, tar = self.enhance(img, tar)
+        img, tar = self.enhance(img, tar, self.enhance_option)
         return torch.from_numpy(img).permute(2, 0, 1), torch.from_numpy(tar)
 
     def __str__(self):
@@ -78,8 +78,8 @@ if __name__ == "__main__":
 
     dataset = ImagesAndLabels(_data_cfg, _enhance_cfg)
     dataloader = InfiniteDataLoader(dataset, batch_size=32, shuffle=True)
-    i = 1
+
     pbar = tqdm(dataloader)
     for images, targets in pbar:
-        i += 1
+        pass
     pbar.close()
