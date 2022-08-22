@@ -1,7 +1,8 @@
 import torch
+from torch.nn import Module
 
 
-class QFocalLoss(torch.nn.Module):
+class QFocalLoss(Module):
     # Wraps Quality focal loss around existing loss_fcn(), i.e. criteria = QFocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
     def __init__(self, loss_fcn, gamma=1.5, alpha=0.25):
         super(QFocalLoss, self).__init__()

@@ -1,7 +1,8 @@
 import torch
+from torch.nn import Module
 
 
-class FocalLoss(torch.nn.Module):
+class FocalLoss(Module):
     # Wraps focal loss around existing loss_fcn(), i.e. criteria = FocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
     def __init__(self, loss_fcn, gamma=1.5, alpha=0.25):
         super(FocalLoss, self).__init__()

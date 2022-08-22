@@ -15,6 +15,17 @@ def check_file(file):
         return files[0]  # return file
 
 
+def cvt_cfg(cfg):
+    if isinstance(cfg, dict):
+        yaml = cfg  # model dict
+        return yaml
+    else:  # is *.yaml
+        import yaml  # for torch hub
+        with open(cfg) as f:
+            yaml = yaml.load(f, Loader=yaml.SafeLoader)  # model dict
+            return yaml
+
+
 def date_modified(path=__file__):
     # return human-readable file modification date, i.e. '2021-3-26'
     t = datetime.datetime.fromtimestamp(Path(path).stat().st_mtime)
@@ -28,5 +39,3 @@ def git_describe(path=Path(__file__).parent):  # path must be a directory
         return subprocess.check_output(s, shell=True, stderr=subprocess.STDOUT).decode()[:-1]
     except subprocess.CalledProcessError:
         return ''  # not a git repository
-
-

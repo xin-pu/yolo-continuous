@@ -107,25 +107,18 @@ def fuse_conv_and_bn(conv, bn):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self, cfg, ch=3, nc=None, anchors=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         self.traced = False
-        if isinstance(cfg, dict):
-            self.yaml = cfg  # model dict
-        else:  # is *.yaml
-            import yaml  # for torch hub
-            self.yaml_file = Path(cfg).name
-            with open(cfg) as f:
-                self.yaml = yaml.load(f, Loader=yaml.SafeLoader)  # model dict
 
         # Define model
-        ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
-        if nc and nc != self.yaml['nc']:
-            self.yaml['nc'] = nc  # override yaml value
+        ch = cfg['ch'] = cfg.get('ch', ch)  # input channels
+        if nc and nc != cfg['nc']:
+            cfg['nc'] = nc  # override yaml value
         if anchors:
-            self.yaml['anchors'] = round(anchors)  # override yaml value
-        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
-        self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
+            cfg['anchors'] = round(anchors)  # override yaml value
+        self.model, self.save = parse_model(deepcopy(cfg), ch=[ch])  # model, savelist
+        self.names = [str(i) for i in range(cfg['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
 
         # Build strides, anchors
@@ -378,10 +371,10 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
 
 
 if __name__ == "__main__":
-    from utils.helper_io import check_file
+    from utils.helper_io import check_file, cvt_cfg
     from utils.helper_torch import select_device
 
-    _cfg = check_file(r"../cfg/net\\yolov7.yaml")  # check file
+    _cfg = cvt_cfg(check_file(r"../cfg/net\\yolov7.yaml"))
     _device = select_device(device='0')
 
     # Create model

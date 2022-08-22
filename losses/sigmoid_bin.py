@@ -1,6 +1,6 @@
+import torch
 from torch.nn import Module
 from torch.nn import BCEWithLogitsLoss, MSELoss
-import torch
 
 
 class SigmoidBin(Module):
