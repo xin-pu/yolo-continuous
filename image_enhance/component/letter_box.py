@@ -1,5 +1,5 @@
 from random import Random
-
+from utils.helper_cv import *
 import numpy as np
 import cv2
 from numpy import ndarray
@@ -61,8 +61,7 @@ class LetterBox(Module):
 
 
 if __name__ == "__main__":
-    from utils.bbox import *
-    from utils.helper_cv import *
+
 
     test_image_file = r"F:\PASCALVOC\VOC2007_Val\JPEGImages\001919.jpg"
 

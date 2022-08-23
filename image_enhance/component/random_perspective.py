@@ -1,8 +1,6 @@
 import math
-import cv2
-import numpy as np
 from random import Random
-
+from utils.helper_cv import *
 from numpy import ndarray
 from torch.nn import Module
 from torchvision.transforms import *
@@ -103,8 +101,7 @@ class RandomPerspective(Module):
 
 
 if __name__ == "__main__":
-    from utils.bbox import *
-    from utils.helper_cv import *
+
 
     test_image_file = r"F:\PASCALVOC\VOC2012\JPEGImages\2007_000733.jpg"
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]

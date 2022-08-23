@@ -21,7 +21,8 @@ weight_decay: 0.0005  # optimizer weight decay 5e-4
 model_cfg: E:\Object Detect\yolo-continuous\cfg\net\yolov7.yaml
 enhance_cfg: E:\Object Detect\yolo-continuous\cfg\enhance\enhance.yaml
 epochs: 300
-batch_size: 32
+pad_size: 64
+batch_size: 64
 image_size: 640
 enhance: False
 shuffle: True

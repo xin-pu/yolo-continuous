@@ -1,7 +1,6 @@
-import numpy as np
 from random import Random
-from numpy import ndarray
 from torch.nn import Module
+from utils.helper_cv import *
 
 
 class RandomFlip(Module):
@@ -40,8 +39,7 @@ class RandomFlip(Module):
 
 
 if __name__ == "__main__":
-    from utils.bbox import *
-    from utils.helper_cv import *
+
 
     test_image_file = r"F:\PASCALVOC\VOC2012\JPEGImages\2007_000733.jpg"
 
