@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as f
 from losses.components.focal_loss import FocalLoss
+from utils.bbox import *
 
 
 def smooth_bce(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
@@ -16,7 +17,7 @@ def is_parallel(model):
 class ComputeLossOTA:
     def __init__(self, model, train_cfg, auto_balance=False):
         super(ComputeLossOTA, self).__init__()
-        self.device = next(model.parameters()).device  # Todo get model device
+        self.device = device = next(model.parameters()).device  # Todo get model device
         self.train_cfg = train_cfg = train_cfg
         self.auto_balance = auto_balance
 
@@ -47,6 +48,8 @@ class ComputeLossOTA:
 
     def __call__(self, preds, targets, images):  # predictions, targets, model
         device = self.device
+
+        # 创建最后的格类损失标量
         loss_cls = torch.zeros(1, device=device)
         loss_box = torch.zeros(1, device=device)
         loss_obj = torch.zeros(1, device=device)
@@ -125,10 +128,10 @@ class ComputeLossOTA:
             if this_target.shape[0] == 0:
                 continue
 
-            txywh = this_target[:, 2:6] * images[batch_idx].shape[1]
-            txyxy = xywh2xyxy(txywh)
+            xywh_targets = this_target[:, 2:6] * images[batch_idx].shape[1]
+            xyxy_targets = cvt_bbox(xywh_targets, CvtFlag.CVT_XYWH_XYXY)
 
-            pxyxys = []
+            xyxys_pred = []
             p_cls = []
             p_obj = []
             from_which_layer = []
@@ -155,14 +158,13 @@ class ComputeLossOTA:
 
                 grid = torch.stack([gi, gj], dim=1)
                 pxy = (fg_pred[:, :2].sigmoid() * 2. - 0.5 + grid) * self.stride[i]  # / 8.
-                # pxy = (fg_pred[:, :2].sigmoid() * 3. - 1. + grid) * self.stride[i]
                 pwh = (fg_pred[:, 2:4].sigmoid() * 2) ** 2 * anchors[i][idx] * self.stride[i]  # / 8.
-                pxywh = torch.cat([pxy, pwh], dim=-1)
-                pxyxy = xywh2xyxy(pxywh)
-                pxyxys.append(pxyxy)
+                xywh_pred = torch.cat([pxy, pwh], dim=-1)
+                xyxy_pred = cvt_bbox(xywh_pred, CvtFlag.CVT_XYWH_XYXY)
+                xyxys_pred.append(xyxy_pred)
 
-            pxyxys = torch.cat(pxyxys, dim=0)
-            if pxyxys.shape[0] == 0:
+            xyxys_pred = torch.cat(xyxys_pred, dim=0)
+            if xyxys_pred.shape[0] == 0:
                 continue
             p_obj = torch.cat(p_obj, dim=0)
             p_cls = torch.cat(p_cls, dim=0)
@@ -173,7 +175,7 @@ class ComputeLossOTA:
             all_gi = torch.cat(all_gi, dim=0)
             all_anch = torch.cat(all_anch, dim=0)
 
-            pair_wise_iou = box_iou(txyxy, pxyxys)
+            pair_wise_iou = box_iou(xyxy_targets, xyxys_pred)
 
             pair_wise_iou_loss = -torch.log(pair_wise_iou + 1e-8)
 
@@ -181,10 +183,10 @@ class ComputeLossOTA:
             dynamic_ks = torch.clamp(top_k.sum(1).int(), min=1)
 
             gt_cls_per_image = (
-                F.one_hot(this_target[:, 1].to(torch.int64), self.nc)
+                f.one_hot(this_target[:, 1].to(torch.int64), self.nc)
                 .float()
                 .unsqueeze(1)
-                .repeat(1, pxyxys.shape[0], 1)
+                .repeat(1, xyxys_pred.shape[0], 1)
             )
 
             num_gt = this_target.shape[0]
@@ -194,7 +196,7 @@ class ComputeLossOTA:
             )
 
             y = cls_preds_.sqrt_()
-            pair_wise_cls_loss = F.binary_cross_entropy_with_logits(
+            pair_wise_cls_loss = f.binary_cross_entropy_with_logits(
                 torch.log(y / (1 - y)), gt_cls_per_image, reduction="none"
             ).sum(-1)
             del cls_preds_
@@ -262,17 +264,13 @@ class ComputeLossOTA:
         device = self.device
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
         num_anchors, num_targets = self.na, targets.shape[0]  # number of anchors, targets
-        indices, anchors = [], []
+        indices, anch = [], []
         gain = torch.ones(7, device=device).long()  # normalized to grid space gain
-        ai = torch.arange(num_anchors, device=device).float() \
-            .view(num_anchors, 1).repeat(1, num_targets)  # same as .repeat_interleave(nt)
+        ai = torch.arange(num_anchors, device=device).float().view(num_anchors, 1).repeat(1, num_targets)
         targets = torch.cat((targets.repeat(num_anchors, 1, 1), ai[:, :, None]), 2)  # append anchor indices
 
         g = 0.5  # bias
-        off = torch.tensor([[0, 0],
-                            [1, 0], [0, 1], [-1, 0], [0, -1],  # j,k,l,m
-                            # [1, 1], [1, -1], [-1, 1], [-1, -1],  # jk,jm,lk,lm
-                            ], device=targets.device).float() * g  # offsets
+        off = torch.tensor([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], ], device=targets.device).float() * g  # offsets
 
         for i in range(self.nl):
             anchors = self.anchors[i]
@@ -283,8 +281,7 @@ class ComputeLossOTA:
             if num_targets:
                 # Matches
                 r = t[:, :, 4:6] / anchors[:, None]  # wh ratio
-                j = torch.max(r, 1. / r).max(2)[0] < self.hyp['anchor_t']  # compare
-                # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
+                j = torch.max(r, 1. / r).max(2)[0] < self.train_cfg['anchor_t']  # compare
                 t = t[j]  # filter
 
                 # Offsets
@@ -307,11 +304,11 @@ class ComputeLossOTA:
             gi, gj = gij.T  # grid xy indices
 
             # Append
-            a = t[:, 6].long()  # anchor indices
-            indices.append((b, a, gj.clamp_(0, gain[3] - 1), gi.clamp_(0, gain[2] - 1)))  # image, anchor, grid indices
-            anchors.append(anchors[a])  # anchors
+            anchor_indices = t[:, 6].long()  # anchor indices
+            indices.append((b, anchor_indices, gj.clamp_(0, gain[3] - 1), gi.clamp_(0, gain[2] - 1)))  # image, anchor, grid indices
+            anch.append(anchors[anchor_indices])  # anchors
 
-        return indices, anchors
+        return indices, anch
 
 
 if __name__ == "__main__":
@@ -325,6 +322,6 @@ if __name__ == "__main__":
     # Step 1 Create Model
     print("Step 1 Create Model")
     model_cfg = cvt_cfg(check_file(_train_cfg['model_cfg']))
-    device = select_device(device='0')
-    net = Model(model_cfg).to(device)
+    _device = select_device(device='0')
+    net = Model(model_cfg).to(_device)
     loss = ComputeLossOTA(net, _train_cfg)

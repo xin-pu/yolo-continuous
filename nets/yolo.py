@@ -129,7 +129,7 @@ class Model(nn.Module):
         if isinstance(m, Detect):
             s = 256  # 2x min stride
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            m.anchors /= m.stride.view(-1, 1, 1)
+            m.anchors = m.anchors / m.stride.view(-1, 1, 1)  # Why? => Anchors 调整到对应尺度下大小 是否可以优化到Detect层
             check_anchor_order(m)
             self.stride = m.stride
             self._initialize_biases()  # only run once

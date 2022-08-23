@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from dataset.infinite_dataLoader import InfiniteDataLoader
 from image_enhance.enhance_package import EnhancePackage
+from utils.bbox import cvt_bbox, CvtFlag
 from utils.helper_io import cvt_cfg
 
 
@@ -28,6 +29,7 @@ class ImagesAndLabels(Dataset):
         self.len = len(self.annot_files)
         self.enhance_option = data_cfg["enhance"] if train else False
         self.enhance = EnhancePackage(data_cfg["image_size"], enhance_cfg)
+        self.pad_size = data_cfg["pad_size"]
 
     def __len__(self):
         return self.len
@@ -44,10 +46,19 @@ class ImagesAndLabels(Dataset):
         target_file = self.annot_files[index]
 
         img = cv2.imread(image_file)
-        tar = np.asarray([[1.0, 1.0, 2.0, 2.0]])
+        tar = torch.from_numpy(self.get_targets(target_file))
+        tar_empty = torch.full((self.pad_size - tar.shape[0], 5), -1)
+        tar_final = torch.concat([tar, tar_empty])
 
-        img, tar = self.enhance(img, tar, self.enhance_option)
-        return torch.from_numpy(img).permute(2, 0, 1), torch.from_numpy(tar)
+        xyxy = tar_final[..., 1:]
+        img, xyxy = self.enhance(img, xyxy, self.enhance_option)
+        xywh = cvt_bbox(torch.asarray(xyxy), CvtFlag.CVT_XYXY_XYWH)  # convert xyxy to xywh
+        xywh[:, [1, 3]] /= img.shape[0]  # normalized height 0-1
+        xywh[:, [0, 2]] /= img.shape[1]  # normalized width 0-1
+        tar_final[..., 1:] = xywh
+        out = torch.zeros((self.pad_size, 6))
+        out[:, 1:] = tar_final
+        return torch.from_numpy(img).permute(2, 0, 1), out
 
     def __str__(self):
         info = "-" * 20 + type(self).__name__ + "-" * 20 + "\r\n"
@@ -63,6 +74,20 @@ class ImagesAndLabels(Dataset):
         return ann
 
     @staticmethod
+    def collate_fn(batch):
+        img, label = zip(*batch)  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+        return torch.stack(img, 0), torch.cat(label, 0)
+
+    @staticmethod
+    def get_targets(annot_file):
+        with open(annot_file, 'r') as f:
+            target = [x.split() for x in f.read().strip().splitlines()]
+            target = np.array(target, dtype=np.float32)
+        return target
+
+    @staticmethod
     def get_dataset_cfg(cfg_file):
         with open(cfg_file, 'r') as file:
             cfg = yaml.safe_load(file)
@@ -73,9 +98,8 @@ if __name__ == "__main__":
     _data_cfg = cvt_cfg("../cfg/voc_train.yaml")
     _enhance_cfg = cvt_cfg("../cfg/enhance/enhance.yaml")
     rank = 1
-
     dataset = ImagesAndLabels(_data_cfg, _enhance_cfg)
-    dataloader = InfiniteDataLoader(dataset, batch_size=32, shuffle=True)
+    dataloader = InfiniteDataLoader(dataset, batch_size=_data_cfg["batch_size"], shuffle=True)
 
     pbar = tqdm(dataloader)
     for images, targets in pbar:
