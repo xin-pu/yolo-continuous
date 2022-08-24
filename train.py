@@ -44,8 +44,6 @@ def train(train_cfg_file):
     for epoch in range(0, epochs):
         net.train()
 
-        mean_loss = torch.zeros(4, device=device)
-
         pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch)
         optimizer.zero_grad()
         loss_sum = 0
@@ -69,6 +67,23 @@ def train(train_cfg_file):
             mean_loss = loss_sum / (i + 1)
             msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}".format(epoch, i, iterations_total, mean_loss)
             pbar.set_description(msg)
+
+        val_loss_sum = 0
+        for i, (images, targets) in enumerate(test_dataloader):
+            images = images.to(device, non_blocking=True).float()
+            targets = targets.to(device)
+            with amp.autocast(enabled=True):
+                pred = net(images)  # forward
+                val_loss = compute_loss_ota(pred, targets, images)
+
+            val_loss_sum += val_loss.item()
+        mean_val_loss = val_loss_sum / (len(test_dataloader))
+        msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tVal Loss:{:>.4f}".format(epoch, 1,
+                                                                                              iterations_total,
+                                                                                              mean_loss,
+                                                                                              mean_val_loss)
+        print(msg)
+
         pbar.close()
         torch.save(net.state_dict(), train_cfg['save_dir'])
 

@@ -47,7 +47,8 @@ class ImagesAndLabels(Dataset):
         img = cv2.imread(image_file)
         tar = self.get_targets(target_file)
 
-        xyxy = tar[..., 1:]
+        xxyy = tar[..., 1:]
+        xyxy = cvt_bbox(torch.from_numpy(xxyy), CvtFlag.CVT_XXYY_XYXY).numpy()
         img, xyxy = self.enhance(img, xyxy, self.enhance_option)
         xywh = cvt_bbox(torch.from_numpy(xyxy), CvtFlag.CVT_XYXY_XYWH)  # convert xyxy to xywh
         xywh[:, [1, 3]] /= img.shape[0]  # normalized height 0-1

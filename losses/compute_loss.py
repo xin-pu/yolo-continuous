@@ -22,8 +22,10 @@ class ComputeLossOTA:
         self.auto_balance = auto_balance
 
         # Define criteria
-        self.bce_cls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([train_cfg['cls_pw']], device=device))
-        self.bce_obj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([train_cfg['obj_pw']], device=device))
+        self.bce_cls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([train_cfg['cls_pw']], device=device),
+                                            reduction='mean')
+        self.bce_obj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([train_cfg['obj_pw']], device=device),
+                                            reduction='mean')
 
         # Class label smoothing
         # https://arxiv.org/pdf/1902.04103.pdf eqn 3

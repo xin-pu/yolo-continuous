@@ -23,7 +23,7 @@ enhance_cfg: E:\Object Detect\yolo-continuous\cfg\enhance\enhance.yaml
 epochs: 300
 batch_size: 32
 image_size: 640
-enhance: False
+enhance: True
 shuffle: True
 resume: True
 device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
