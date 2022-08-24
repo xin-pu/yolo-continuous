@@ -5,7 +5,7 @@ import pandas as pd
 import torch.distributed
 import torch
 import yaml
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from dataset.infinite_dataLoader import InfiniteDataLoader
@@ -55,6 +55,8 @@ class ImagesAndLabels(Dataset):
         tar = torch.from_numpy(tar)
         tar[..., 1:] = xywh
 
+        img = img / 255.
+
         labels_out = torch.zeros((tar.shape[0], 6))
         labels_out[:, 1:] = tar
 
@@ -96,7 +98,7 @@ class ImagesAndLabels(Dataset):
 
 
 if __name__ == "__main__":
-    _data_cfg = cvt_cfg("../cfg/voc_train.yaml")
+    _data_cfg = cvt_cfg("../cfg/raccoon_train.yaml")
     _enhance_cfg = cvt_cfg("../cfg/enhance/enhance.yaml")
     rank = 1
     dataset = ImagesAndLabels(_data_cfg, _enhance_cfg)

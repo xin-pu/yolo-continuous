@@ -51,11 +51,11 @@ def train(train_cfg_file):
         loss_sum = 0
         for i, (images, targets) in pbar:
             iterations_total = i + epoch * iterations_each_epoch
-            images = images.to(device, non_blocking=True).float() / 255
-
+            images = images.to(device, non_blocking=True).float()
+            targets = targets.to(device)
             with amp.autocast(enabled=True):
                 pred = net(images)  # forward
-                loss = compute_loss_ota(pred, targets.to(device), images)  # loss scaled by batch_size
+                loss = compute_loss_ota(pred, targets, images)  # loss scaled by batch_size
 
             scaler.scale(loss).backward()
 
@@ -70,6 +70,7 @@ def train(train_cfg_file):
             msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}".format(epoch, i, iterations_total, mean_loss)
             pbar.set_description(msg)
         pbar.close()
+        torch.save(net.state_dict(), train_cfg['save_dir'])
 
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for tensorboard
