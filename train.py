@@ -6,7 +6,6 @@ from tqdm import tqdm
 from data_loader import get_dataloader
 from learningrate_scheduler import *
 from losses.compute_loss import ComputeLossOTA
-from nets.ModelEMA import ModelEMA
 from nets.yolo import Model
 from optimizer import get_optimizer
 from utils.helper_io import check_file, cvt_cfg
@@ -38,8 +37,7 @@ def train(train_cfg_file):
     compute_loss_ota = ComputeLossOTA(net, train_cfg)
 
     # Step 5 Train
-    epochs = train_cfg["epochs"]
-    epochs = 2
+    epochs = train_cfg["epochs"] = 1
     iterations_each_epoch = len(train_dataloader)
     iterations_total = 0
 

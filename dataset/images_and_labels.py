@@ -47,18 +47,15 @@ class ImagesAndLabels(Dataset):
 
         img = cv2.imread(image_file)
         tar = torch.from_numpy(self.get_targets(target_file))
-        tar_empty = torch.full((self.pad_size - tar.shape[0], 5), -1)
-        tar_final = torch.concat([tar, tar_empty])
 
-        xyxy = tar_final[..., 1:]
+        xyxy = tar[..., 1:]
         img, xyxy = self.enhance(img, xyxy, self.enhance_option)
         xywh = cvt_bbox(torch.asarray(xyxy), CvtFlag.CVT_XYXY_XYWH)  # convert xyxy to xywh
         xywh[:, [1, 3]] /= img.shape[0]  # normalized height 0-1
         xywh[:, [0, 2]] /= img.shape[1]  # normalized width 0-1
-        tar_final[..., 1:] = xywh
-        out = torch.zeros((self.pad_size, 6))
-        out[:, 1:] = tar_final
-        return torch.from_numpy(img).permute(2, 0, 1), out
+        tar[..., 1:] = xywh
+
+        return torch.from_numpy(img).permute(2, 0, 1), tar
 
     def __str__(self):
         info = "-" * 20 + type(self).__name__ + "-" * 20 + "\r\n"
@@ -73,6 +70,7 @@ class ImagesAndLabels(Dataset):
             ann.append(os.path.join(self.annot_encode_folder, "{}.txt".format(file_name)))
         return ann
 
+    # Keypoint 数据裁剪函数，默认NONE不裁剪
     @staticmethod
     def collate_fn(batch):
         img, label = zip(*batch)  # transposed
@@ -99,9 +97,10 @@ if __name__ == "__main__":
     _enhance_cfg = cvt_cfg("../cfg/enhance/enhance.yaml")
     rank = 1
     dataset = ImagesAndLabels(_data_cfg, _enhance_cfg)
-    dataloader = InfiniteDataLoader(dataset, batch_size=_data_cfg["batch_size"], shuffle=True)
+    dataloader = InfiniteDataLoader(dataset, batch_size=_data_cfg["batch_size"], shuffle=True,
+                                    collate_fn=ImagesAndLabels.collate_fn)
 
     pbar = tqdm(dataloader)
     for images, targets in pbar:
-        pass
+        print(targets.shape)
     pbar.close()
