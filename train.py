@@ -37,7 +37,7 @@ def train(train_cfg_file):
     compute_loss_ota = ComputeLossOTA(net, train_cfg)
 
     # Step 5 Train
-    epochs = train_cfg["epochs"] = 1
+    epochs = train_cfg["epochs"]
     iterations_each_epoch = len(train_dataloader)
     iterations_total = 0
 
@@ -48,7 +48,7 @@ def train(train_cfg_file):
 
         pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch)
         optimizer.zero_grad()
-
+        loss_sum = 0
         for i, (images, targets) in pbar:
             iterations_total = i + epoch * iterations_each_epoch
             images = images.to(device, non_blocking=True).float() / 255
@@ -65,9 +65,11 @@ def train(train_cfg_file):
             optimizer.zero_grad()
 
             # Print
-            # mean_loss = (mean_loss * i + loss_items) / (i + 1)
-            msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}".format(epoch, i, iterations_total, loss.item())
+            loss_sum += loss.item()
+            mean_loss = loss_sum / (i + 1)
+            msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}".format(epoch, i, iterations_total, mean_loss)
             pbar.set_description(msg)
+        pbar.close()
 
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for tensorboard
@@ -75,5 +77,5 @@ def train(train_cfg_file):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
+    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
     train(_train_cfg_file)

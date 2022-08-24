@@ -7,6 +7,7 @@ from torchvision.transforms import *
 
 
 class RandomPerspective(Module):
+    # Todo Bbox will loss after call
     def __init__(self,
                  degrees=10,
                  translate=.1,

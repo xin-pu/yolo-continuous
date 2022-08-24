@@ -1,0 +1,39 @@
+train: F:\Raccoon\train.txt
+val: F:\Raccoon\train.txt
+annot_encode_folder: F:\Raccoon\labels
+save_dir: F:\SaveModels\Yolo\raccoon.pth
+
+num_labels: 1
+
+labels: [ "raccoon"]
+
+adam: False # use torch.optim.Adam() optimizer
+decay: Cosine
+lrI: 0.01  # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
+momentum: 0.937  # SGD momentum/Adam beta1
+weight_decay: 0.0005  # optimizer weight decay 5e-4
+
+
+model_cfg: E:\Object Detect\yolo-continuous\cfg\net\yolov7-tiny.yaml
+enhance_cfg: E:\Object Detect\yolo-continuous\cfg\enhance\enhance.yaml
+epochs: 100
+batch_size: 32
+image_size: 416
+enhance: True
+shuffle: True
+resume: True
+device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
+single-cls: True  # train multi-class data as single-class
+workers: 8 # maximum number of dataloader workers
+save_period: 1
+
+iou_loss_ratio: 1.0
+box: 0.05  # box loss gain
+cls: 0.3  # cls loss gain
+cls_pw: 1.0  # cls BCELoss positive_weight
+obj: 0.7  # obj loss gain (scale with pixels)
+obj_pw: 1.0  # obj BCELoss positive_weight
+iou_t: 0.20  # IoU training threshold
+anchor_t: 4.0  # anchor-multiple threshold
+fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)

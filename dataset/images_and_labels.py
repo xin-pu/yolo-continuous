@@ -45,13 +45,14 @@ class ImagesAndLabels(Dataset):
         target_file = self.annot_files[index]
 
         img = cv2.imread(image_file)
-        tar = torch.from_numpy(self.get_targets(target_file))
+        tar = self.get_targets(target_file)
 
         xyxy = tar[..., 1:]
         img, xyxy = self.enhance(img, xyxy, self.enhance_option)
-        xywh = cvt_bbox(torch.asarray(xyxy), CvtFlag.CVT_XYXY_XYWH)  # convert xyxy to xywh
+        xywh = cvt_bbox(torch.from_numpy(xyxy), CvtFlag.CVT_XYXY_XYWH)  # convert xyxy to xywh
         xywh[:, [1, 3]] /= img.shape[0]  # normalized height 0-1
         xywh[:, [0, 2]] /= img.shape[1]  # normalized width 0-1
+        tar = torch.from_numpy(tar)
         tar[..., 1:] = xywh
 
         labels_out = torch.zeros((tar.shape[0], 6))
@@ -104,5 +105,5 @@ if __name__ == "__main__":
 
     pbar = tqdm(dataloader)
     for images, targets in pbar:
-        print(targets.shape)
+        pass
     pbar.close()

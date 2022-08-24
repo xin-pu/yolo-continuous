@@ -31,8 +31,8 @@ class EnhancePackage(Module):
         random_equalize = RandomEqualize(cfg["equalize"])
 
         self.enhance_without_label = [random_equalize]
-        self.enhance = [random_perspective,
-                        random_hsv,
+        # Todo Remove Random Perspective
+        self.enhance = [random_hsv,
                         random_flip, ]
 
     def __call__(self, image, labels, enhance=True):
