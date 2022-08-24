@@ -58,18 +58,6 @@ def cvt_bbox(bbox, flag: CvtFlag):
 
 
 def box_iou(box1, box2):
-    # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
-    """
-    Return intersection-over-union (Jaccard index) of boxes.
-    Both sets of boxes are expected to be in (x1, y1, x2, y2) format.
-    Arguments:
-        box1 (Tensor[N, 4])
-        box2 (Tensor[M, 4])
-    Returns:
-        iou (Tensor[N, M]): the NxM matrix containing the pairwise
-            IoU values for every element in boxes1 and boxes2
-    """
-
     def box_area(box):
         # box = 4xn
         return (box[2] - box[0]) * (box[3] - box[1])

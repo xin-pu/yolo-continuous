@@ -44,7 +44,7 @@ class ComputeLossOTA:
         self.anchors = detect.anchors
         self.stride = detect.stride
 
-        self.balance = {3: [4.0, 1.0, 0.4]}.get(detect.nl, [4.0, 1.0, 0.25, 0.06, .02])  # P3-P7
+        self.balance = [4.0, 1.0, 0.4]  # P3-P5
         self.ssi = list(detect.stride).index(16) if auto_balance else 0  # stride 16 index
 
     def __call__(self, preds, targets, images):  # predictions, targets, model
@@ -249,27 +249,32 @@ class ComputeLossOTA:
         return matching_bs, matching_as, matching_gjs, matching_gis, matching_targets, matching_anchors
 
     def find_3_positive(self, pred, targets):
-
+        # ---- 获取设备
         device = self.device
-        # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
+        # ---- 获得每个特征层先验框的数量
+        # ---- 获得真实框的数量
         num_anchors, num_targets = self.na, targets.shape[0]  # number of anchors, targets
+        # ---- 创建空列表存放indices和anchors
         indices, anch = [], []
+
         gain = torch.ones(7, device=device).long()  # normalized to grid space gain
+
+        # ---- Targets [num_anchor, num_gt, 7]
         ai = torch.arange(num_anchors, device=device).float().view(num_anchors, 1).repeat(1, num_targets)
         targets = torch.cat((targets.repeat(num_anchors, 1, 1), ai[:, :, None]), 2)  # append anchor indices
 
         g = 0.5  # bias
-        off = torch.tensor([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], ], device=targets.device).float() * g  # offsets
+        off = torch.tensor([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], ], device=device).float() * g  # offsets
 
-        for i in range(self.nl):
-            anchors = self.anchors[i]
+        for i in range(len(pred)):
+            anchors_i = self.anchors[i]
             gain[2:6] = torch.tensor(pred[i].shape)[[3, 2, 3, 2]]  # xyxy gain
 
             # Match targets to anchors
             t = targets * gain
             if num_targets:
                 # Matches
-                r = t[:, :, 4:6] / anchors[:, None]  # wh ratio
+                r = t[:, :, 4:6] / anchors_i[:, None]  # wh ratio
                 j = torch.max(r, 1. / r).max(2)[0] < self.train_cfg['anchor_t']  # compare
                 t = t[j]  # filter
 
@@ -296,7 +301,7 @@ class ComputeLossOTA:
             anchor_indices = t[:, 6].long()  # anchor indices
             indices.append((b, anchor_indices, gj.clamp_(0, gain[3] - 1),
                             gi.clamp_(0, gain[2] - 1)))  # image, anchor, grid indices
-            anch.append(anchors[anchor_indices])  # anchors
+            anch.append(anchors_i[anchor_indices])  # anchors
 
         return indices, anch
 

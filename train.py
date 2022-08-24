@@ -55,7 +55,7 @@ def train(train_cfg_file):
 
             with amp.autocast(enabled=True):
                 pred = net(images)  # forward
-                loss, loss_items = compute_loss_ota(pred, targets.to(device), images)  # loss scaled by batch_size
+                loss = compute_loss_ota(pred, targets.to(device), images)  # loss scaled by batch_size
 
             scaler.scale(loss).backward()
 
@@ -65,8 +65,8 @@ def train(train_cfg_file):
             optimizer.zero_grad()
 
             # Print
-            mean_loss = (mean_loss * i + loss_items) / (i + 1)
-            msg = "{}\t{}\t{}\t{}".format(epoch, iterations_total, i, loss)
+            # mean_loss = (mean_loss * i + loss_items) / (i + 1)
+            msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}".format(epoch, i, iterations_total, loss.item())
             pbar.set_description(msg)
 
         # Scheduler

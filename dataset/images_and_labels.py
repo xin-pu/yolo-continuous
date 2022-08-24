@@ -29,7 +29,6 @@ class ImagesAndLabels(Dataset):
         self.len = len(self.annot_files)
         self.enhance_option = data_cfg["enhance"] if train else False
         self.enhance = EnhancePackage(data_cfg["image_size"], enhance_cfg)
-        self.pad_size = data_cfg["pad_size"]
 
     def __len__(self):
         return self.len
@@ -55,7 +54,10 @@ class ImagesAndLabels(Dataset):
         xywh[:, [0, 2]] /= img.shape[1]  # normalized width 0-1
         tar[..., 1:] = xywh
 
-        return torch.from_numpy(img).permute(2, 0, 1), tar
+        labels_out = torch.zeros((tar.shape[0], 6))
+        labels_out[:, 1:] = tar
+
+        return torch.from_numpy(img).permute(2, 0, 1), labels_out
 
     def __str__(self):
         info = "-" * 20 + type(self).__name__ + "-" * 20 + "\r\n"
