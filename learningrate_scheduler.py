@@ -22,17 +22,17 @@ def linear_decay(y1=0.0, y2=1.0, steps=100):
     return lambda x: y2 - (y2 - y1) * (1.0 - x / (steps - 1))
 
 
-def inverse_time_decay(y1=0.0, y2=1.0, beta=0.9):
+def inverse_time_decay(y1=0.0, y2=1.0, beta=0.1):
     # lambda function for sinusoidal ramp from y1 to y2
     return lambda x: y2 - (y2 - y1) / (1 + beta * x)
 
 
-def exponential_decay(y1=0.0, y2=1.0, beta=0.9):
+def exponential_decay(y1=0.0, y2=1.0, beta=0.96):
     # lambda function for sinusoidal ramp from y1 to y2
     return lambda x: y2 - (y2 - y1) * math.pow(beta, x)
 
 
-def natural_exponential_decay(y1=0.0, y2=1.0, beta=0.9):
+def natural_exponential_decay(y1=0.0, y2=1.0, beta=0.04):
     # lambda function for sinusoidal ramp from y1 to y2
     return lambda x: y2 - (y2 - y1) * math.exp(-beta * x)
 

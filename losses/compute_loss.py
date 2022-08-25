@@ -194,11 +194,7 @@ class ComputeLossOTA:
             ).sum(-1)
             del cls_preds_
 
-            cost = (
-                    pair_wise_cls_loss
-                    + 3.0 * pair_wise_iou_loss
-            )
-
+            cost = (pair_wise_cls_loss + 3.0 * pair_wise_iou_loss)
             matching_matrix = torch.zeros_like(cost)
 
             for gt_idx in range(num_gt):

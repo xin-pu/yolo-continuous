@@ -1,3 +1,7 @@
+import os.path
+import time
+from copy import deepcopy
+
 import torch
 from torch.cuda import amp
 
@@ -40,13 +44,16 @@ def train(train_cfg_file):
     epochs = train_cfg["epochs"]
     iterations_each_epoch = len(train_dataloader)
     iterations_total = 0
+    mean_val_loss_his = []
 
     for epoch in range(0, epochs):
         net.train()
 
-        pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch)
+        pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch, ncols=100, colour='#FFFFFF')
         optimizer.zero_grad()
-        loss_sum = 0
+        loss_sum, mean_loss = 0, 0
+        val_loss_sum, mean_val_loss = 0, 0
+
         for i, (images, targets) in pbar:
             iterations_total = i + epoch * iterations_each_epoch
             images = images.to(device, non_blocking=True).float()
@@ -63,12 +70,11 @@ def train(train_cfg_file):
             optimizer.zero_grad()
 
             # Print
-            loss_sum += loss.item()
+            loss_sum += loss.item() / images.shape[0]
             mean_loss = loss_sum / (i + 1)
             msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}".format(epoch, i, iterations_total, mean_loss)
             pbar.set_description(msg)
 
-        val_loss_sum = 0
         for i, (images, targets) in enumerate(test_dataloader):
             images = images.to(device, non_blocking=True).float()
             targets = targets.to(device)
@@ -76,16 +82,19 @@ def train(train_cfg_file):
                 pred = net(images)  # forward
                 val_loss = compute_loss_ota(pred, targets, images)
 
-            val_loss_sum += val_loss.item()
+            val_loss_sum += val_loss.item() / images.shape[0]
         mean_val_loss = val_loss_sum / (len(test_dataloader))
-        msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tVal Loss:{:>.4f}".format(epoch, 1,
-                                                                                              iterations_total,
-                                                                                              mean_loss,
-                                                                                              mean_val_loss)
-        print(msg)
-
+        mean_val_loss_his.append(mean_val_loss)
         pbar.close()
-        torch.save(net.state_dict(), train_cfg['save_dir'])
+
+        if mean_val_loss <= min(mean_val_loss_his):
+            path = os.path.join(train_cfg['save_dir'], "best.pt")
+            ckpt = {'epoch': epoch,
+                    'model': deepcopy(net),
+                    'optimizer': optimizer.state_dict()}
+            torch.save(ckpt, path)
+            print("Epoch {:05d} Val Loss:{:>.4f} save to {}\r\n".format(epoch, mean_val_loss, path))
+        time.sleep(0.2)
 
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for tensorboard
@@ -93,5 +102,5 @@ def train(train_cfg_file):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
+    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
     train(_train_cfg_file)

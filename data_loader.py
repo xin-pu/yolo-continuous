@@ -3,10 +3,8 @@ import torch
 from dataset.images_and_labels import ImagesAndLabels
 from dataset.infinite_dataLoader import InfiniteDataLoader
 from utils.helper_io import cvt_cfg, check_file
-from utils.helper_torch import timer
 
 
-@timer
 def get_dataloader(train_cfg, train=True):
     enhance_cfg = cvt_cfg(train_cfg['enhance_cfg'])
     dataset = ImagesAndLabels(train_cfg, enhance_cfg, train)
