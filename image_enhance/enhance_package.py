@@ -36,8 +36,7 @@ class EnhancePackage(Module):
                         random_flip, ]
 
     def __call__(self, image, labels, enhance=True):
-        image = torch.asarray(image)
-        image = image.numpy()
+
         if enhance:
             for e in self.enhance_without_label:
                 image = e(image)

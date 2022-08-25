@@ -1,7 +1,10 @@
 import math
 from enum import Enum
 
+import numpy as np
 import torch
+from numpy import ndarray
+from torch import Tensor
 from torchvision.ops import nms
 
 
@@ -24,10 +27,10 @@ def check(flag: CvtFlag):
     return True if flag.value in range(6) else False
 
 
-def cvt_bbox(bbox, flag: CvtFlag):
+def cvt_bbox(bbox: Tensor | ndarray, flag: CvtFlag):
     if not check(flag):
         raise Exception()
-    res_bbox = bbox.clone()
+    res_bbox = bbox.clone() if bbox is Tensor else np.empty_like(bbox)
     if flag == CvtFlag.CVT_XXYY_XYXY:
         res_bbox[:, 1] = bbox[:, 2]
         res_bbox[:, 2] = bbox[:, 1]

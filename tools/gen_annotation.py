@@ -6,7 +6,16 @@ import numpy as np
 from tqdm import tqdm
 
 
-def convert_annotation(annot_file, list_file):
+def print_table(list1, list2):
+    for i in range(len(list1[0])):
+        print("|", end=' ')
+        for j in range(len(list1)):
+            print(list1[j][i].rjust(int(list2[j])), end=' ')
+            print("|", end=' ')
+        print()
+
+
+def convert_annotation(annot_file, image_file, list_file):
     in_file = open(annot_file, encoding='utf-8')
     tree = parse(in_file)
     root = tree.getroot()
@@ -22,7 +31,7 @@ def convert_annotation(annot_file, list_file):
         xml_bbox = obj.find('bndbox')
         b = (int(float(xml_bbox.find('xmin').text)), int(float(xml_bbox.find('ymin').text)),
              int(float(xml_bbox.find('xmax').text)), int(float(xml_bbox.find('ymax').text)))
-        list_file.write(" " + ",".join([str(a) for a in b]) + ',' + str(cls_id))
+        list_file.write(" " + str(cls_id) + ',' + ",".join([str(a) for a in b]))  # X1Y1X2Y2
 
         nums[classes.index(cls)] = nums[classes.index(cls)] + 1
 
@@ -93,10 +102,20 @@ def gen_annotation():
             for image_id in tqdm(image_ids, desc="write {} dataset to {}".format(ds, d1)):
                 image_file = os.path.join(dataset_root_folder, ds, "JPEGImages", "{}.jpg".format(image_id))
                 annot_file = os.path.join(dataset_root_folder, ds, "Annotations", "{}.xml".format(image_id))
-                list_file.write(image_file)
-                convert_annotation(annot_file, list_file)
+
+                convert_annotation(annot_file, image_file, list_file)
                 list_file.write('\n')
             list_file.close()
+
+    str_nums = [str(int(x)) for x in nums]
+    tableData = [classes, str_nums]
+    colWidths = [0] * len(tableData)
+    len1 = 0
+    for i in range(len(tableData)):
+        for j in range(len(tableData[i])):
+            if len(tableData[i][j]) > colWidths[i]:
+                colWidths[i] = len(tableData[i][j])
+    print_table(tableData, colWidths)
 
 
 if __name__ == "__main__":

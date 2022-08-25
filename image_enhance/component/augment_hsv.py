@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     test_image_file = r"F:\PASCALVOC\VOC2012\JPEGImages\2007_000733.jpg"
 
-    test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]
+    test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR),dtype=np.float32)  # [H,W,C]
     test_bbox = np.asarray([[48, 25, 273, 383], [103, 201, 448, 435]])  # mode=xyxy
 
     enhanceImage, __bbox = RandomHSV()(test_image, test_bbox)  # [H,W,C]
