@@ -1,9 +1,8 @@
 import math
-from enum import Enum
-
 import numpy as np
 import torch
 from numpy import ndarray
+from enum import Enum
 from torch import Tensor
 from torchvision.ops import nms
 
@@ -30,7 +29,11 @@ def check(flag: CvtFlag):
 def cvt_bbox(bbox: Tensor | ndarray, flag: CvtFlag):
     if not check(flag):
         raise Exception()
-    res_bbox = bbox.clone() if bbox is Tensor else np.empty_like(bbox)
+    if isinstance(bbox, np.ndarray):
+        res_bbox = np.empty_like(bbox)
+    else:
+        res_bbox = bbox.clone()
+
     if flag == CvtFlag.CVT_XXYY_XYXY:
         res_bbox[:, 1] = bbox[:, 2]
         res_bbox[:, 2] = bbox[:, 1]
