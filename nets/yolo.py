@@ -127,6 +127,7 @@ class Model(nn.Module):
             cfg['nc'] = nc  # override yaml value
         if anchors:
             cfg['anchors'] = round(anchors)  # override yaml value
+
         self.model, self.save = parse_model(deepcopy(cfg), ch=[ch])  # model, savelist
         self.names = [str(i) for i in range(cfg['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
@@ -287,24 +288,10 @@ class Model(nn.Module):
         self.info()
         return self
 
-    def nms(self, mode=True):  # add or remove NMS module
-        present = type(self.model[-1]) is NMS  # last layer is NMS
-        if mode and not present:
-            print('Adding NMS... ')
-            m = NMS()  # module
-            m.f = -1  # from
-            m.i = self.model[-1].i + 1  # index
-            self.model.add_module(name='%s' % m.i, module=m)  # add
-            self.eval()
-        elif not mode and present:
-            print('Removing NMS... ')
-            self.model = self.model[:-1]  # remove
-        return self
-
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
 
-    def detect_image(self, image, crop=False, count=False):
+    def detect_image(self, image, image_size=640, crop=False, count=False):
         # ---------------------------------------------------#
         #   计算输入图片的高和宽
         # ---------------------------------------------------#
@@ -314,7 +301,7 @@ class Model(nn.Module):
         #   给图像增加灰条，实现不失真的resize
         #   也可以直接resize进行识别
         # ---------------------------------------------------------#
-        image_data = resize_image(image, (self.input_shape[1], self.input_shape[0]), self.letterbox_image)
+        image_data = resize_image(image, (image_size, image_size), True)
         image_data = image_data / 255.
         # ---------------------------------------------------------#
         #   添加上batch_size维度

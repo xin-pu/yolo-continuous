@@ -12,7 +12,7 @@ labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
 
 adam: False # use torch.optim.Adam() optimizer
 decay: Cosine
-lrI: 0.01  # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrI: 0.001 # initial learning rate (SGD=1E-2, Adam=1E-3)
 lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
@@ -21,13 +21,12 @@ weight_decay: 0.0005  # optimizer weight decay 5e-4
 model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
 enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
 epochs: 100
-batch_size: 32
+batch_size: 16
 image_size: 640
-enhance: True
+enhance: False
 shuffle: True
 resume: True
 device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
-single-cls: True  # train multi-class data as single-class
 workers: 8 # maximum number of dataloader workers
 save_period: 1
 

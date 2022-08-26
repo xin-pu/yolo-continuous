@@ -15,7 +15,7 @@ def print_table(list1, list2):
         print()
 
 
-def convert_annotation(annot_file, image_file, list_file):
+def convert_annotation(annot_file, list_file):
     in_file = open(annot_file, encoding='utf-8')
     tree = parse(in_file)
     root = tree.getroot()
@@ -102,8 +102,8 @@ def gen_annotation():
             for image_id in tqdm(image_ids, desc="write {} dataset to {}".format(ds, d1)):
                 image_file = os.path.join(dataset_root_folder, ds, "JPEGImages", "{}.jpg".format(image_id))
                 annot_file = os.path.join(dataset_root_folder, ds, "Annotations", "{}.xml".format(image_id))
-
-                convert_annotation(annot_file, image_file, list_file)
+                list_file.write(image_file)
+                convert_annotation(annot_file, list_file)
                 list_file.write('\n')
             list_file.close()
 
@@ -119,13 +119,10 @@ def gen_annotation():
 
 
 if __name__ == "__main__":
-    dataset_root_folder = r'F:\PASCALVOC'
-    dataset_gather = ['VOC2012', 'VOC2007']
+    dataset_root_folder = r'F:\RACCOON'
+    dataset_gather = ['Ori']
 
-    classes = ["aeroplane", "bicycle", "bird", "boat", "bottle",
-               "bus", "car", "cat", "chair", "cow",
-               "diningtable", "dog", "horse", "motorbike", "person",
-               "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+    classes = ["raccoon"]
 
     nums = np.zeros(len(classes))
     # 不同数据集分别拆分为 trainval.txt,test.txt,train.txt,val.txt

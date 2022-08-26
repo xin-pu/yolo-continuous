@@ -1,399 +1,100 @@
-"""
-Author: Xin.PU
-Email: Pu.Xin@outlook.com
-Time: 2022/8/25 13:44
-"""
-from random import sample, shuffle
-
 import cv2
 import numpy as np
+import torch.distributed
 import torch
-from PIL import Image
-from torch.utils.data.dataset import Dataset
+
+from torch.utils.data import Dataset
+from tqdm import tqdm
+from dataset.infinite_dataLoader import InfiniteDataLoader
+from image_enhance.enhance_package import EnhancePackage
+from utils.bbox import cvt_bbox, CvtFlag
+from utils.helper_io import cvt_cfg
 
 
 class YoloDataset(Dataset):
-    def __init__(self, annotation_lines, input_shape, num_classes, anchors, anchors_mask, epoch_length,
-                 mosaic, mixup, mosaic_prob, mixup_prob, train, special_aug_ratio=0.7):
-        super(YoloDataset, self).__init__()
-        self.annotation_lines = annotation_lines
-        self.input_shape = input_shape
-        self.num_classes = num_classes
-        self.anchors = anchors
-        self.anchors_mask = anchors_mask
-        self.epoch_length = epoch_length
-        self.mosaic = mosaic
-        self.mosaic_prob = mosaic_prob
-        self.mixup = mixup
-        self.mixup_prob = mixup_prob
-        self.train = train
-        self.special_aug_ratio = special_aug_ratio
 
-        self.epoch_now = -1
-        self.length = len(self.annotation_lines)
+    def __init__(self,
+                 data_cfg,
+                 enhance_cfg,
+                 train=True):
 
-        self.bbox_attrs = 5 + num_classes
+        self.image_shape = (data_cfg["image_size"], data_cfg["image_size"])
+        with open(data_cfg["train"] if train else data_cfg["val"], encoding='utf-8') as f:
+            self.index_file = f.readlines()
+        self.len = len(self.index_file)
+
+        self.enhance_option = data_cfg["enhance"] if train else False
+        self.enhance = EnhancePackage(self.image_shape, enhance_cfg)
 
     def __len__(self):
-        return self.length
+        return self.len
 
     def __getitem__(self, index):
-        index = index % self.length
+        """
 
-        image, box = self.get_random_data(self.annotation_lines[index], self.input_shape, random=self.train)
+        :param index:
+        :return:
+        img: [C,H,W]
+        tar: (Label, X1,Y1,X2,Y2)
+        """
+        line = self.index_file[index].split()
+        image_file = line[0]
 
-        image = np.transpose((np.array(image, dtype=np.float32) / 255.), (2, 0, 1))
-        box = np.array(box, dtype=np.float32)
+        # Step 1 获取原始图像和标签信息
+        img = cv2.imread(image_file)
+        label_box = np.array([np.array(list(map(int, box.split(',')))) for box in line[1:]], dtype=np.float32)
+        is_empty = label_box.shape[0] == 0
+        label = label_box[..., 0] if not is_empty else np.empty(shape=(0, 1))
+        box_xyxy = label_box[..., 1:] if not is_empty else np.empty(shape=(0, 4))
 
-        # ---------------------------------------------------#
-        #   对真实框进行预处理
-        # ---------------------------------------------------#
-        nL = len(box)
-        labels_out = np.zeros((nL, 6))
-        if nL:
-            # ---------------------------------------------------#
-            #   对真实框进行归一化，调整到0-1之间
-            # ---------------------------------------------------#
-            box[:, [0, 2]] = box[:, [0, 2]] / self.input_shape[1]
-            box[:, [1, 3]] = box[:, [1, 3]] / self.input_shape[0]
-            # ---------------------------------------------------#
-            #   序号为0、1的部分，为真实框的中心
-            #   序号为2、3的部分，为真实框的宽高
-            #   序号为4的部分，为真实框的种类
-            # ---------------------------------------------------#
-            box[:, 2:4] = box[:, 2:4] - box[:, 0:2]
-            box[:, 0:2] = box[:, 0:2] + box[:, 2:4] / 2
+        # Step 2 图像增广
+        img = np.array(img)
+        final_img, final_xyxy = self.enhance(img, box_xyxy, self.enhance_option)
 
-            # ---------------------------------------------------#
-            #   调整顺序，符合训练的格式
-            #   labels_out中序号为0的部分在collect时处理
-            # ---------------------------------------------------#
-            labels_out[:, 1] = box[:, -1]
-            labels_out[:, 2:] = box[:, :4]
+        # Step 3 归一，并最终确认增广后图像尺寸是否符合输入尺寸，如果不符合，在此直接拉升
+        final_img = final_img.astype(np.float32) / 255
 
-        return image, labels_out
+        # Step 4 调整
+        label = torch.from_numpy(label)
 
-    # ---------------------------------------------------------#
-    #   将图像转换成RGB图像，防止灰度图在预测时报错。
-    #   代码仅仅支持RGB图像的预测，所有其它类型的图像都会转化成RGB
-    # ---------------------------------------------------------#
+        final_xywh = cvt_bbox(final_xyxy, CvtFlag.CVT_XYXY_XYWH)  #
+        final_xywh = torch.from_numpy(final_xywh)
+        final_xywh[:, [1, 3]] /= final_img.shape[0]
+        final_xywh[:, [0, 2]] /= final_img.shape[1]
 
-    def get_random_data(self, annotation_line, input_shape, jitter=.3, hue=.1, sat=0.7, val=0.4, random=True):
-        line = annotation_line.split()
-        # ------------------------------#
-        #   读取图像并转换成RGB图像
-        # ------------------------------#
-        image = Image.open(line[0])
-        image = cvtColor(image)
-        # ------------------------------#
-        #   获得图像的高宽与目标高宽
-        # ------------------------------#
-        iw, ih = image.size
-        h, w = input_shape
-        # ------------------------------#
-        #   获得预测框
-        # ------------------------------#
-        box = np.array([np.array(list(map(int, box.split(',')))) for box in line[1:]])
+        # Step 5 拼接最终 [ImageIndex]_[label]_[XYWH]
+        labels_out = torch.zeros((label_box.shape[0], 6))
+        if not is_empty:
+            labels_out[:, 1] = label
+            labels_out[:, 2:] = final_xywh
 
-        if not random:
-            scale = min(w / iw, h / ih)
-            nw = int(iw * scale)
-            nh = int(ih * scale)
-            dx = (w - nw) // 2
-            dy = (h - nh) // 2
+        return torch.from_numpy(final_img).permute(2, 0, 1), labels_out
 
-            # ---------------------------------#
-            #   将图像多余的部分加上灰条
-            # ---------------------------------#
-            image = image.resize((nw, nh), Image.BICUBIC)
-            new_image = Image.new('RGB', (w, h), (128, 128, 128))
-            new_image.paste(image, (dx, dy))
-            image_data = np.array(new_image, np.float32)
+    def __str__(self):
+        info = "-" * 20 + type(self).__name__ + "-" * 20 + "\r\n"
+        for key, value in self.__dict__.items():
+            info += "{}:\t{}\r\n".format(key, value)
+        return info
 
-            # ---------------------------------#
-            #   对真实框进行调整
-            # ---------------------------------#
-            if len(box) > 0:
-                np.random.shuffle(box)
-                box[:, [0, 2]] = box[:, [0, 2]] * nw / iw + dx
-                box[:, [1, 3]] = box[:, [1, 3]] * nh / ih + dy
-                box[:, 0:2][box[:, 0:2] < 0] = 0
-                box[:, 2][box[:, 2] > w] = w
-                box[:, 3][box[:, 3] > h] = h
-                box_w = box[:, 2] - box[:, 0]
-                box_h = box[:, 3] - box[:, 1]
-                box = box[np.logical_and(box_w > 1, box_h > 1)]  # discard invalid box
-
-            return image_data, box
-
-        # ------------------------------------------#
-        #   对图像进行缩放并且进行长和宽的扭曲
-        # ------------------------------------------#
-        new_ar = iw / ih * self.rand(1 - jitter, 1 + jitter) / self.rand(1 - jitter, 1 + jitter)
-        scale = self.rand(.25, 2)
-        if new_ar < 1:
-            nh = int(scale * h)
-            nw = int(nh * new_ar)
-        else:
-            nw = int(scale * w)
-            nh = int(nw / new_ar)
-        image = image.resize((nw, nh), Image.BICUBIC)
-
-        # ------------------------------------------#
-        #   将图像多余的部分加上灰条
-        # ------------------------------------------#
-        dx = int(self.rand(0, w - nw))
-        dy = int(self.rand(0, h - nh))
-        new_image = Image.new('RGB', (w, h), (128, 128, 128))
-        new_image.paste(image, (dx, dy))
-        image = new_image
-
-        # ------------------------------------------#
-        #   翻转图像
-        # ------------------------------------------#
-        flip = self.rand() < .5
-        if flip: image = image.transpose(Image.FLIP_LEFT_RIGHT)
-
-        image_data = np.array(image, np.uint8)
-        # ---------------------------------#
-        #   对图像进行色域变换
-        #   计算色域变换的参数
-        # ---------------------------------#
-        r = np.random.uniform(-1, 1, 3) * [hue, sat, val] + 1
-        # ---------------------------------#
-        #   将图像转到HSV上
-        # ---------------------------------#
-        hue, sat, val = cv2.split(cv2.cvtColor(image_data, cv2.COLOR_RGB2HSV))
-        dtype = image_data.dtype
-        # ---------------------------------#
-        #   应用变换
-        # ---------------------------------#
-        x = np.arange(0, 256, dtype=r.dtype)
-        lut_hue = ((x * r[0]) % 180).astype(dtype)
-        lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
-        lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
-
-        image_data = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-        image_data = cv2.cvtColor(image_data, cv2.COLOR_HSV2RGB)
-
-        # ---------------------------------#
-        #   对真实框进行调整
-        # ---------------------------------#
-        if len(box) > 0:
-            np.random.shuffle(box)
-            box[:, [0, 2]] = box[:, [0, 2]] * nw / iw + dx
-            box[:, [1, 3]] = box[:, [1, 3]] * nh / ih + dy
-            if flip: box[:, [0, 2]] = w - box[:, [2, 0]]
-            box[:, 0:2][box[:, 0:2] < 0] = 0
-            box[:, 2][box[:, 2] > w] = w
-            box[:, 3][box[:, 3] > h] = h
-            box_w = box[:, 2] - box[:, 0]
-            box_h = box[:, 3] - box[:, 1]
-            box = box[np.logical_and(box_w > 1, box_h > 1)]
-
-        return image_data, box
-
-    def merge_bboxes(self, bboxes, cutx, cuty):
-        merge_bbox = []
-        for i in range(len(bboxes)):
-            for box in bboxes[i]:
-                tmp_box = []
-                x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
-
-                if i == 0:
-                    if y1 > cuty or x1 > cutx:
-                        continue
-                    if y2 >= cuty and y1 <= cuty:
-                        y2 = cuty
-                    if x2 >= cutx and x1 <= cutx:
-                        x2 = cutx
-
-                if i == 1:
-                    if y2 < cuty or x1 > cutx:
-                        continue
-                    if y2 >= cuty and y1 <= cuty:
-                        y1 = cuty
-                    if x2 >= cutx and x1 <= cutx:
-                        x2 = cutx
-
-                if i == 2:
-                    if y2 < cuty or x2 < cutx:
-                        continue
-                    if y2 >= cuty and y1 <= cuty:
-                        y1 = cuty
-                    if x2 >= cutx and x1 <= cutx:
-                        x1 = cutx
-
-                if i == 3:
-                    if y1 > cuty or x2 < cutx:
-                        continue
-                    if y2 >= cuty and y1 <= cuty:
-                        y2 = cuty
-                    if x2 >= cutx and x1 <= cutx:
-                        x1 = cutx
-                tmp_box.append(x1)
-                tmp_box.append(y1)
-                tmp_box.append(x2)
-                tmp_box.append(y2)
-                tmp_box.append(box[-1])
-                merge_bbox.append(tmp_box)
-        return merge_bbox
-
-    def get_random_data_with_Mosaic(self, annotation_line, input_shape, jitter=0.3, hue=.1, sat=0.7, val=0.4):
-        h, w = input_shape
-        min_offset_x = self.rand(0.3, 0.7)
-        min_offset_y = self.rand(0.3, 0.7)
-
-        image_datas = []
-        box_datas = []
-        index = 0
-        for line in annotation_line:
-            # ---------------------------------#
-            #   每一行进行分割
-            # ---------------------------------#
-            line_content = line.split()
-            # ---------------------------------#
-            #   打开图片
-            # ---------------------------------#
-            image = Image.open(line_content[0])
-            image = cvtColor(image)
-
-            # ---------------------------------#
-            #   图片的大小
-            # ---------------------------------#
-            iw, ih = image.size
-            # ---------------------------------#
-            #   保存框的位置
-            # ---------------------------------#
-            box = np.array([np.array(list(map(int, box.split(',')))) for box in line_content[1:]])
-
-            # ---------------------------------#
-            #   是否翻转图片
-            # ---------------------------------#
-            flip = self.rand() < .5
-            if flip and len(box) > 0:
-                image = image.transpose(Image.FLIP_LEFT_RIGHT)
-                box[:, [0, 2]] = iw - box[:, [2, 0]]
-
-            # ------------------------------------------#
-            #   对图像进行缩放并且进行长和宽的扭曲
-            # ------------------------------------------#
-            new_ar = iw / ih * self.rand(1 - jitter, 1 + jitter) / self.rand(1 - jitter, 1 + jitter)
-            scale = self.rand(.4, 1)
-            if new_ar < 1:
-                nh = int(scale * h)
-                nw = int(nh * new_ar)
-            else:
-                nw = int(scale * w)
-                nh = int(nw / new_ar)
-            image = image.resize((nw, nh), Image.BICUBIC)
-
-            # -----------------------------------------------#
-            #   将图片进行放置，分别对应四张分割图片的位置
-            # -----------------------------------------------#
-            if index == 0:
-                dx = int(w * min_offset_x) - nw
-                dy = int(h * min_offset_y) - nh
-            elif index == 1:
-                dx = int(w * min_offset_x) - nw
-                dy = int(h * min_offset_y)
-            elif index == 2:
-                dx = int(w * min_offset_x)
-                dy = int(h * min_offset_y)
-            elif index == 3:
-                dx = int(w * min_offset_x)
-                dy = int(h * min_offset_y) - nh
-
-            new_image = Image.new('RGB', (w, h), (128, 128, 128))
-            new_image.paste(image, (dx, dy))
-            image_data = np.array(new_image)
-
-            index = index + 1
-            box_data = []
-            # ---------------------------------#
-            #   对box进行重新处理
-            # ---------------------------------#
-            if len(box) > 0:
-                np.random.shuffle(box)
-                box[:, [0, 2]] = box[:, [0, 2]] * nw / iw + dx
-                box[:, [1, 3]] = box[:, [1, 3]] * nh / ih + dy
-                box[:, 0:2][box[:, 0:2] < 0] = 0
-                box[:, 2][box[:, 2] > w] = w
-                box[:, 3][box[:, 3] > h] = h
-                box_w = box[:, 2] - box[:, 0]
-                box_h = box[:, 3] - box[:, 1]
-                box = box[np.logical_and(box_w > 1, box_h > 1)]
-                box_data = np.zeros((len(box), 5))
-                box_data[:len(box)] = box
-
-            image_datas.append(image_data)
-            box_datas.append(box_data)
-
-        # ---------------------------------#
-        #   将图片分割，放在一起
-        # ---------------------------------#
-        cutx = int(w * min_offset_x)
-        cuty = int(h * min_offset_y)
-
-        new_image = np.zeros([h, w, 3])
-        new_image[:cuty, :cutx, :] = image_datas[0][:cuty, :cutx, :]
-        new_image[cuty:, :cutx, :] = image_datas[1][cuty:, :cutx, :]
-        new_image[cuty:, cutx:, :] = image_datas[2][cuty:, cutx:, :]
-        new_image[:cuty, cutx:, :] = image_datas[3][:cuty, cutx:, :]
-
-        new_image = np.array(new_image, np.uint8)
-        # ---------------------------------#
-        #   对图像进行色域变换
-        #   计算色域变换的参数
-        # ---------------------------------#
-        r = np.random.uniform(-1, 1, 3) * [hue, sat, val] + 1
-        # ---------------------------------#
-        #   将图像转到HSV上
-        # ---------------------------------#
-        hue, sat, val = cv2.split(cv2.cvtColor(new_image, cv2.COLOR_RGB2HSV))
-        dtype = new_image.dtype
-        # ---------------------------------#
-        #   应用变换
-        # ---------------------------------#
-        x = np.arange(0, 256, dtype=r.dtype)
-        lut_hue = ((x * r[0]) % 180).astype(dtype)
-        lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
-        lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
-
-        new_image = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-        new_image = cv2.cvtColor(new_image, cv2.COLOR_HSV2RGB)
-
-        # ---------------------------------#
-        #   对框进行进一步的处理
-        # ---------------------------------#
-        new_boxes = self.merge_bboxes(box_datas, cutx, cuty)
-
-        return new_image, new_boxes
-
-    def get_random_data_with_MixUp(self, image_1, box_1, image_2, box_2):
-        new_image = np.array(image_1, np.float32) * 0.5 + np.array(image_2, np.float32) * 0.5
-        if len(box_1) == 0:
-            new_boxes = box_2
-        elif len(box_2) == 0:
-            new_boxes = box_1
-        else:
-            new_boxes = np.concatenate([box_1, box_2], axis=0)
-        return new_image, new_boxes
-
-
-# DataLoader中collate_fn使用
-def yolo_dataset_collate(batch):
-    images = []
-    bboxes = []
-    for i, (img, box) in enumerate(batch):
-        images.append(img)
-        box[:, 0] = i
-        bboxes.append(box)
-
-    images = torch.from_numpy(np.array(images)).type(torch.FloatTensor)
-    bboxes = torch.from_numpy(np.concatenate(bboxes, 0)).type(torch.FloatTensor)
-    return images, bboxes
+    # Keypoint 数据裁剪函数，其实将一个batch下不同数量的Label,Box 以序号做索引拼接成一个张量
+    @staticmethod
+    def collate_fn(batch):
+        img, label = zip(*batch)  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+        return torch.stack(img, 0), torch.cat(label, 0)
 
 
 if __name__ == "__main__":
-    pass
+    _data_cfg = cvt_cfg("../cfg/raccoon_train.yaml")
+    _enhance_cfg = cvt_cfg("../cfg/enhance/enhance.yaml")
+    rank = 1
+    dataset = YoloDataset(_data_cfg, _enhance_cfg)
+    dataloader = InfiniteDataLoader(dataset, batch_size=_data_cfg["batch_size"],
+                                    shuffle=False,
+                                    collate_fn=YoloDataset.collate_fn)
+
+    pbar = tqdm(dataloader)
+    for images, targets in pbar:
+        pass
+    pbar.close()
