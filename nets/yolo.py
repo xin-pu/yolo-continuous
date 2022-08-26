@@ -130,7 +130,6 @@ class Model(nn.Module):
 
         self.model, self.save = parse_model(deepcopy(cfg), ch=[ch])  # model, savelist
         self.names = [str(i) for i in range(cfg['nc'])]  # default names
-        # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
 
         # Build strides, anchors
         m = self.model[-1]  # Detect()

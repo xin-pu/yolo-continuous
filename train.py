@@ -103,8 +103,7 @@ def train(train_cfg_file):
     iterations_each_epoch = len(train_dataloader)
     mean_val_loss_his = []
 
-    model_train = net.train()
-    model_train = torch.nn.DataParallel(model_train)
+    model_train = torch.nn.DataParallel(net)
 
     for epoch in range(0, epochs):
 
