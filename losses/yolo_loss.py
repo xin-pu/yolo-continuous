@@ -413,3 +413,17 @@ class YOLOLoss(nn.Module):
             anchors.append(anchors_i[a])
 
         return indices, anchors
+
+
+if __name__ == "__main__":
+    anchors = np.array([[12, 16, 19, 36, 40, 28],  # P3/8
+                        [36, 75, 76, 55, 72, 146],  # P4/16
+                        [142, 110, 192, 243, 459, 401]]).reshape(-1, 2)
+    loss = YOLOLoss(anchors, 20, (640, 640))
+    pred = [torch.ones(size=(1, 3, 80, 80, 25)).float(),
+            torch.ones(size=(1, 3, 40, 40, 25)).float(),
+            torch.ones(size=(1, 3, 20, 20, 25)).float()]
+    target = torch.asarray([[0, 0.5, 0.5, 0.8, 0.8, 1]]).float()
+    images = torch.ones(size=(1, 3, 640, 640))
+    l = loss(pred, target, images)
+    print(l)
