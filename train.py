@@ -1,19 +1,17 @@
-import os.path
+import os
 import time
-from copy import deepcopy
 
 import numpy as np
 import torch
-from torch import nn
 from torch.cuda import amp
-
+from copy import deepcopy
 from tqdm import tqdm
-
 from dataset.data_loader import get_dataloader
-from learningrate_scheduler import *
+from nets.yolo2 import YoloBody
+from utils.learningrate_scheduler import *
 from losses.yolo_loss import YOLOLoss
 from nets.yolo import Model
-from optimizer import get_optimizer
+from utils.optimizer import *
 from utils.helper_io import check_file, cvt_cfg
 from utils.helper_torch import select_device
 
@@ -83,23 +81,22 @@ def train(train_cfg_file):
     model_cfg = cvt_cfg(check_file(train_cfg['model_cfg']))
     model_cfg["nc"] = label_num = train_cfg["num_labels"]
     device = select_device(device='0')
-    net = Model(model_cfg).to(device)
+    net = YoloBody(train_cfg['anchors_mask'], train_cfg['num_labels'], 'l', pretrained=False).to(device)
+
     # Todo Resume
 
     # Step 2 Create Optimizer
     optimizer = get_optimizer(net, train_cfg)  # 以LrI作为初始学习率
     learning_rate_scheduler = get_lr_scheduler(optimizer, 1, train_cfg["lrF"], LearningSchedule.CosineDecay)
     scaler = amp.GradScaler(enabled=True)
-    # Todo Resume
 
     # Step 3 DataLoader
     train_dataloader = get_dataloader(train_cfg, True)
     test_dataloader = get_dataloader(train_cfg, False)
-    # Todo
 
     # Step 4 Loss
     anchors = np.array(model_cfg['anchors']).reshape(-1, 2)
-    compute_loss_ota = YOLOLoss(anchors, label_num, (640, 640))
+    yolo_loss = YOLOLoss(anchors, label_num, (640, 640))
 
     # Step 5 Train
     epochs = train_cfg["epochs"]
@@ -122,7 +119,7 @@ def train(train_cfg_file):
             targets = targets.to(device)
             with amp.autocast(enabled=True):
                 pred = model_train(images)  # forward
-                loss = compute_loss_ota(pred, targets, images)  # loss scaled by batch_size
+                loss = yolo_loss(pred, targets, images)  # loss scaled by batch_size
 
             scaler.scale(loss).backward()
 
@@ -134,7 +131,9 @@ def train(train_cfg_file):
             # Print
             loss_sum += loss.item()
             mean_loss = loss_sum / (i + 1)
-            msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}".format(epoch, i, iterations_total, mean_loss)
+            msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tlr:{:>.5f}".format(epoch, i, iterations_total,
+                                                                                            mean_loss,
+                                                                                            get_lr(optimizer))
             pbar.set_description(msg)
 
         for i, (images, targets) in enumerate(test_dataloader):
@@ -142,7 +141,7 @@ def train(train_cfg_file):
             targets = targets.to(device)
             with amp.autocast(enabled=True):
                 pred = net(images)
-                val_loss = compute_loss_ota(pred, targets, images)
+                val_loss = yolo_loss(pred, targets, images)
 
             val_loss_sum += val_loss.item()
         mean_val_loss = val_loss_sum / (len(test_dataloader))
@@ -158,7 +157,9 @@ def train(train_cfg_file):
             print("Epoch {:05d} Val Loss:{:>.4f} save to {}\r\n".format(epoch, mean_val_loss, path))
         time.sleep(0.2)
 
+        learning_rate_scheduler.step()
+
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
+    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
     train(_train_cfg_file)

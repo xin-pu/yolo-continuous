@@ -44,7 +44,11 @@ class YOLOLoss(nn.Module):
         # Step 1-1 获得工作的设备
         device = targets.device
         # Step 1-2 20x20,40x40,80x80尺度顺序对应 stride 和 anchor mask 等计算
-        predictions.reverse()
+        # predictions.reverse()
+        for i in range(len(predictions)):
+            bs, _, h, w = predictions[i].size()
+            predictions[i] = predictions[i].view(bs, len(self.anchors_mask[i]), -1, h, w).permute(0, 1, 3, 4,
+                                                                                                  2).contiguous()
 
         # Step 1-3计算获得对应特征层的高宽
         feature_map_sizes = [torch.tensor(prediction.shape, device=device)[[3, 2, 3, 2]].type_as(prediction) for
@@ -86,7 +90,7 @@ class YOLOLoss(nn.Module):
                 selected_tbox[:, :2] -= grid.type_as(prediction)
 
                 #   计算预测框和真实框的回归损失
-                iou = bbox_iou(box.T, selected_tbox, x1y1x2y2=False, CIoU=True)
+                iou = bbox_iou(box.T, selected_tbox, x1y1x2y2=False, ciou=True)
                 box_loss += (1.0 - iou).mean()
 
                 #   根据预测结果的iou获得置信度损失的gt

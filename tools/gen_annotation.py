@@ -31,7 +31,7 @@ def convert_annotation(annot_file, list_file):
         xml_bbox = obj.find('bndbox')
         b = (int(float(xml_bbox.find('xmin').text)), int(float(xml_bbox.find('ymin').text)),
              int(float(xml_bbox.find('xmax').text)), int(float(xml_bbox.find('ymax').text)))
-        list_file.write(" " + str(cls_id) + ',' + ",".join([str(a) for a in b]))  # X1Y1X2Y2
+        list_file.write(" " + ",".join([str(a) for a in b]) + ',' + str(cls_id))  # X1Y1X2Y2 Label
 
         nums[classes.index(cls)] = nums[classes.index(cls)] + 1
 
@@ -119,10 +119,13 @@ def gen_annotation():
 
 
 if __name__ == "__main__":
-    dataset_root_folder = r'F:\RACCOON'
-    dataset_gather = ['Ori']
+    dataset_root_folder = r'F:\PASCALVOC'
+    dataset_gather = ['VOC2012']
 
-    classes = ["raccoon"]
+    classes = ["aeroplane", "bicycle", "bird", "boat", "bottle",
+               "bus", "car", "cat", "chair", "cow",
+               "diningtable", "dog", "horse", "motorbike", "person",
+               "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
     nums = np.zeros(len(classes))
     # 不同数据集分别拆分为 trainval.txt,test.txt,train.txt,val.txt

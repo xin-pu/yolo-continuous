@@ -78,7 +78,7 @@ class ComputeLossOTA:
                 pred_box = torch.cat((pred_xy, pred_wh), 1)  # predicted box
                 selected_tbox = targets[i][:, 2:6] * pre_gen_gains[i]
                 selected_tbox[:, :2] -= grid
-                iou = bbox_iou(pred_box.T, selected_tbox, x1y1x2y2=False, CIoU=True)  # iou(prediction, target)
+                iou = bbox_iou(pred_box.T, selected_tbox, x1y1x2y2=False, ciou=True)  # iou(prediction, target)
                 loss_box = loss_box + (1.0 - iou).mean()  # iou loss
 
                 # Objectness

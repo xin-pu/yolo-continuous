@@ -77,7 +77,7 @@ def box_iou(box1, box2):
     return inter / (area1[:, None] + area2 - inter)  # iou = inter / (area1 + area2 - inter)
 
 
-def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
+def bbox_iou(box1, box2, x1y1x2y2=True, giou=False, diou=False, ciou=False, eps=1e-7):
     # Returns the IoU of box1 to box2. box1 is 4, box2 is nx4
     box2 = box2.T
 
@@ -102,16 +102,16 @@ def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=
 
     iou = inter / union
 
-    if GIoU or DIoU or CIoU:
+    if giou or diou or ciou:
         cw = torch.max(b1_x2, b2_x2) - torch.min(b1_x1, b2_x1)  # convex (smallest enclosing box) width
         ch = torch.max(b1_y2, b2_y2) - torch.min(b1_y1, b2_y1)  # convex height
-        if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
+        if ciou or diou:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
             c2 = cw ** 2 + ch ** 2 + eps  # convex diagonal squared
             rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 +
                     (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # center distance squared
-            if DIoU:
+            if diou:
                 return iou - rho2 / c2  # DIoU
-            elif CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
+            elif ciou:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
                 v = (4 / math.pi ** 2) * torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
                 with torch.no_grad():
                     alpha = v / (v - iou + (1 + eps))
@@ -194,22 +194,6 @@ def non_max_suppression(self,
                        nms_thres)
             max_detections = detections_class[keep]
 
-            # # 按照存在物体的置信度排序
-            # _, conf_sort_index = torch.sort(detections_class[:, 4]*detections_class[:, 5], descending=True)
-            # detections_class = detections_class[conf_sort_index]
-            # # 进行非极大抑制
-            # max_detections = []
-            # while detections_class.size(0):
-            #     # 取出这一类置信度最高的，一步一步往下判断，判断重合程度是否大于nms_thres，如果是则去除掉
-            #     max_detections.append(detections_class[0].unsqueeze(0))
-            #     if len(detections_class) == 1:
-            #         break
-            #     ious = bbox_iou(max_detections[-1], detections_class[1:])
-            #     detections_class = detections_class[1:][ious < nms_thres]
-            # # 堆叠
-            # max_detections = torch.cat(max_detections).data
-
-            # Add max detections to outputs
             output[i] = max_detections if output[i] is None else torch.cat((output[i], max_detections))
 
         if output[i] is not None:

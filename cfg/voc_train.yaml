@@ -1,34 +1,26 @@
+device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
+
 train: F:\PASCALVOC\train.txt
 val: F:\PASCALVOC\val.txt
-save_dir: F:\SaveModels\Yolo\voc_yolov7.pty
-save_name: voc2012
+epochs: 100
+batch_size: 1
+image_size: 640
+enhance: False
+shuffle: False
+workers: 1 # maximum number of dataloader workers
+
+enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
+model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
 
 num_labels: 20
+anchors: [ [ 12,16, 19,36, 40,28 ], [ 36,75, 76,55, 72,146 ], [ 142,110, 192,243, 459,401 ] ]
 
+anchors_mask: [ [ 6, 7, 8 ], [ 3, 4, 5 ], [ 0, 1, 2 ] ]
 labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
           "bus",    "car",  "cat",   "chair",   "cow",
           "diningtable",  "dog",  "horse",  "motorbike",  "person",
           "pottedplant", "sheep",   "sofa", "train", "tvmonitor" ]
 
-adam: False # use torch.optim.Adam() optimizer
-decay: Cosine
-lrI: 0.001 # initial learning rate (SGD=1E-2, Adam=1E-3)
-lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
-momentum: 0.937  # SGD momentum/Adam beta1
-weight_decay: 0.0005  # optimizer weight decay 5e-4
-
-
-model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
-enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
-epochs: 100
-batch_size: 16
-image_size: 640
-enhance: False
-shuffle: True
-resume: True
-device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
-workers: 8 # maximum number of dataloader workers
-save_period: 1
 
 iou_loss_ratio: 1.0
 box: 0.05  # box loss gain
@@ -39,3 +31,16 @@ obj_pw: 1.0  # obj BCELoss positive_weight
 iou_t: 0.20  # IoU training threshold
 anchor_t: 4.0  # anchor-multiple threshold
 fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
+
+adam: False # use torch.optim.Adam() optimizer
+decay: Cosine
+lrI: 0.0001 # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
+momentum: 0.937  # SGD momentum/Adam beta1
+weight_decay: 0.0005  # optimizer weight decay 5e-4
+
+
+resume: True
+save_dir: F:\SaveModels\Yolo\
+save_name: voc.pt
+save_period: 1

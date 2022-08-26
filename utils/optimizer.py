@@ -4,6 +4,17 @@ from torch.nn import Module
 from utils.helper_torch import timer
 
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
+
+
+def set_optimizer_lr(optimizer, lr_scheduler_func, epoch):
+    lr = lr_scheduler_func(epoch)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
+
 @timer
 def get_optimizer(model: Module,
                   cfg):
