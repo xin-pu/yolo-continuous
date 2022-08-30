@@ -81,8 +81,8 @@ def train(train_cfg_file):
     model_cfg = cvt_cfg(check_file(train_cfg['model_cfg']))
     model_cfg["nc"] = label_num = train_cfg["num_labels"]
     device = select_device(device='0')
-    net = YoloBody(train_cfg['anchors_mask'], train_cfg['num_labels'], 'l', pretrained=False).to(device)
-    # net = Model(model_cfg).to(device)
+    # net = YoloBody(train_cfg['anchors_mask'], train_cfg['num_labels'], 'l', pretrained=False).to(device)
+    net = Model(model_cfg, random_initial=True).to(device)
     # Todo Resume
 
     # Step 2 Create Optimizer
@@ -160,5 +160,5 @@ def train(train_cfg_file):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
+    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
     train(_train_cfg_file)

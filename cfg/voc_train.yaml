@@ -3,7 +3,7 @@ device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
 train: F:\PASCALVOC\train.txt
 val: F:\PASCALVOC\val.txt
 epochs: 100
-batch_size: 16
+batch_size: 8
 image_size: 640
 enhance: True
 shuffle: True

@@ -41,7 +41,7 @@ class ComputeLossOTA:
 
         self.gr = train_cfg['iou_loss_ratio']
         self.na = detect.na
-        self.nc = detect.nc
+        self.nc = detect.classes
         self.nl = detect.nl
         self.anchors = detect.anchors
         self.stride = detect.stride

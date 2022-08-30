@@ -4,11 +4,8 @@ import numpy as np
 from PIL.Image import Image
 from PIL.ImageDraw import ImageDraw
 from PIL.ImageFont import ImageFont
-
-from utils.helper_torch import timer as ti
 from copy import deepcopy
 
-from pathlib import Path
 import time
 import torch.nn
 from torch import nn
@@ -18,12 +15,11 @@ from nets.detect import Detect
 from nets.iaux_detect import IAuxDetect
 from nets.ibin import IBin
 from nets.idetect import IDetect
-from utils.bbox import nms, non_max_suppression
+from utils.bbox import non_max_suppression
 import thop
 
 
 def check_anchor_order(m):
-    # Check anchor order against stride order for YOLO Detect() module m, and correct if necessary
     a = m.anchor_grid.prod(-1).view(-1)  # anchor area
     da = a[-1] - a[0]  # delta a
     ds = m.stride[-1] - m.stride[0]  # delta s
@@ -34,19 +30,18 @@ def check_anchor_order(m):
 
 
 def make_divisible(x, divisor):
-    # Returns x evenly divisible by divisor
     return math.ceil(x / divisor) * divisor
 
 
 def initialize_weights(model):
     for m in model.modules():
-        t = type(m)
-        if t is nn.Conv2d:
-            pass  # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-        elif t is nn.BatchNorm2d:
-            m.eps = 1e-3
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.normal_(m.weight, 0, 0.01)
+        elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+            nn.init.normal_(m.weight, 0, 0.01)
+            nn.init.constant_(m.bias, 0)
             m.momentum = 0.03
-        elif t in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6]:
+        elif isinstance(m, (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6)):
             m.inplace = True
 
 
@@ -116,8 +111,13 @@ def fuse_conv_and_bn(conv, bn):
 
 
 class Model(nn.Module):
-    @ti
-    def __init__(self, cfg, ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self,
+                 cfg,
+                 ch=3,
+                 nc=None,
+                 anchors=None,
+                 training=True,
+                 random_initial=True):
         super(Model, self).__init__()
         self.traced = False
 
@@ -131,44 +131,22 @@ class Model(nn.Module):
         self.model, self.save = parse_model(deepcopy(cfg), ch=[ch])  # model, savelist
         self.names = [str(i) for i in range(cfg['nc'])]  # default names
 
-        # Build strides, anchors
-        m = self.model[-1]  # Detect()
-        if isinstance(m, Detect):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            m.anchors = m.anchors / m.stride.view(-1, 1, 1)  # Why? => Anchors 调整到对应尺度下大小 是否可以优化到Detect层
-            check_anchor_order(m)
-            self.stride = m.stride
-            self._initialize_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IDetect):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            m.anchors /= m.stride.view(-1, 1, 1)
-            check_anchor_order(m)
-            self.stride = m.stride
-            self._initialize_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IAuxDetect):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[:4]])  # forward
-            # print(m.stride)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            check_anchor_order(m)
-            self.stride = m.stride
-            self._initialize_aux_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IBin):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            m.anchors /= m.stride.view(-1, 1, 1)
-            check_anchor_order(m)
-            self.stride = m.stride
-            self._initialize_biases_bin()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
+        # Set per
+        for m in self.modules():
+            m.training = training
+            m.random_initial = random_initial
 
         # Init weights, biases
-        initialize_weights(self)
+        if random_initial:
+            for m in self.modules():
+                if isinstance(m, (nn.Conv2d, nn.Linear)):
+                    nn.init.normal_(m.weight, 0, 0.01)
+                elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                    nn.init.normal_(m.weight, 0, 0.01)
+                    nn.init.constant_(m.bias, 0)
+                elif isinstance(m, (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6)):
+                    m.inplace = True
+
         self.info()
 
     def forward(self, x, augment=False, profile=False):
@@ -268,11 +246,6 @@ class Model(nn.Module):
         for mi in m.m:  # from
             b = mi.bias.detach().view(m.na, -1).T  # conv.bias(255) to (3,85)
             print(('%6g Conv2d.bias:' + '%10.3g' * 6) % (mi.weight.shape[1], *b[:5].mean(1).tolist(), b[5:].mean()))
-
-    # def _print_weights(self):
-    #     for m in self.model.modules():
-    #         if type(m) is Bottleneck:
-    #             print('%10.3g' % (m.w.detach().sigmoid() * 2))  # shortcut weights
 
     def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers
         print('Fusing layers... ')

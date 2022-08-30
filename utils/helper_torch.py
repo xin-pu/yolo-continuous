@@ -1,6 +1,7 @@
 import os
 
 import torch
+from torch import nn
 
 from utils.helper_io import git_describe, date_modified
 
@@ -42,3 +43,5 @@ def select_device(device='', batch_size=None):
         s += 'CPU\n'
 
     return torch.device('cuda:0' if cuda else 'cpu')
+
+
