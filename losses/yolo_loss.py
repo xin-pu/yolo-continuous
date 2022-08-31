@@ -116,9 +116,7 @@ class YOLOLoss(nn.Module):
         return loss
 
     def build_targets(self, predictions, targets, images):
-        # -------------------------------------------#
         #   匹配正样本
-        # -------------------------------------------#
         indices, anch = self.find_3_positive(predictions, targets)
 
         matching_bs = [[] for _ in predictions]
@@ -128,14 +126,11 @@ class YOLOLoss(nn.Module):
         matching_targets = [[] for _ in predictions]
         matching_anchs = [[] for _ in predictions]
 
-        # -------------------------------------------#
         #   一共三层
-        # -------------------------------------------#
         num_layer = len(predictions)
-        # -------------------------------------------#
+
         #   对batch_size进行循环，进行OTA匹配
         #   在batch_size循环中对layer进行循环
-        # -------------------------------------------#
         for batch_idx in range(predictions[0].shape[0]):
             # -------------------------------------------#
             #   先判断匹配上的真实框哪些属于该图片

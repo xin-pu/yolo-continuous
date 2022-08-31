@@ -11,7 +11,7 @@ def get_dataloader(train_cfg, train=True):
                                     batch_size=train_cfg['batch_size'],
                                     shuffle=train_cfg['shuffle'],
                                     num_workers=train_cfg['workers'],
-                                    pin_memory=train_cfg['train_cfg'],
+                                    pin_memory=train_cfg['pin_memory'],
                                     drop_last=train_cfg['drop_last'],
                                     collate_fn=collate_fn, )
     return dataloader

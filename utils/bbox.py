@@ -203,6 +203,12 @@ def non_max_suppression(self,
     return output
 
 
+def make_grid(nx=20, ny=20):
+    # Fixed  Warning: torch.meshgrid : in an upcoming release, it will be required to
+    yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)], indexing="ij")
+    return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
+
+
 if __name__ == "__main__":
     _xxyy = torch.asarray([[1, 2, 3, 4]]).float()
 

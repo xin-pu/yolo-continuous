@@ -7,7 +7,6 @@ from torch.cuda import amp
 from copy import deepcopy
 from tqdm import tqdm
 from dataset.data_loader import get_dataloader
-from nets.yolo2 import YoloBody
 from utils.learningrate_scheduler import *
 from losses.yolo_loss import YOLOLoss
 from nets.yolo import Model
@@ -75,13 +74,13 @@ class ModelEMA:
 
 def train(train_cfg_file):
     train_cfg = cvt_cfg(train_cfg_file)
+    device = select_device(device='0')
 
     # Step 1 Create Model
     print("Step 1 Create Model")
     model_cfg = cvt_cfg(check_file(train_cfg['model_cfg']))
-    model_cfg["nc"] = label_num = train_cfg["num_labels"]
-    device = select_device(device='0')
-    # net = YoloBody(train_cfg['anchors_mask'], train_cfg['num_labels'], 'l', pretrained=False).to(device)
+    model_cfg["num_classes"] = label_num = train_cfg["num_labels"]
+    model_cfg['anchors'] = train_cfg['anchors']
     net = Model(model_cfg, random_initial=True).to(device)
     # Todo Resume
 
@@ -95,7 +94,7 @@ def train(train_cfg_file):
     test_dataloader = get_dataloader(train_cfg, False)
 
     # Step 4 Loss
-    anchors = np.array(model_cfg['anchors']).reshape(-1, 2)
+    anchors = np.array(train_cfg['anchors']).reshape(-1, 2)
     yolo_loss = YOLOLoss(anchors, label_num, (640, 640))
 
     # Step 5 Train

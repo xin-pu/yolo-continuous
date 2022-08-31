@@ -1,11 +1,4 @@
-import os
-
-import numpy as np
-from PIL.Image import Image
-from PIL.ImageDraw import ImageDraw
-from PIL.ImageFont import ImageFont
 from copy import deepcopy
-
 import time
 import torch.nn
 from torch import nn
@@ -15,7 +8,6 @@ from nets.detect import Detect
 from nets.iaux_detect import IAuxDetect
 from nets.ibin import IBin
 from nets.idetect import IDetect
-from utils.bbox import non_max_suppression
 import thop
 
 
@@ -47,8 +39,8 @@ def initialize_weights(model):
 
 def model_info(model, verbose=False, img_size=640):
     # Model information. img_size may be int or list, i.e. img_size=640 or img_size=[640, 320]
-    n_p = sum(x.numel() for x in model.parameters())  # number parameters
-    n_g = sum(x.numel() for x in model.parameters() if x.requires_grad)  # number gradients
+    num_parameters = sum(x.numel() for x in model.parameters())
+    num_gradients = sum(x.numel() for x in model.parameters() if x.requires_grad)
     if verbose:
         print('%5s %40s %9s %12s %20s %10s %10s' % ('layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
         for i, (name, p) in enumerate(model.named_parameters()):
@@ -70,7 +62,6 @@ def time_synchronized():
     # pytorch-accurate time
     if torch.cuda.is_available():
         torch.cuda.synchronize()
-
     return time.time()
 
 
@@ -88,26 +79,27 @@ def scale_img(img, ratio=1.0, same_shape=False, gs=32):  # img(16,3,256,416)
 
 
 def fuse_conv_and_bn(conv, bn):
-    # Fuse convolution and batchnorm layers https://tehnokv.com/posts/fusing-batchnorm-and-conv/
-    fusedconv = nn.Conv2d(conv.in_channels,
-                          conv.out_channels,
-                          kernel_size=conv.kernel_size,
-                          stride=conv.stride,
-                          padding=conv.padding,
-                          groups=conv.groups,
-                          bias=True).requires_grad_(False).to(conv.weight.device)
+    # Fuse convolution and batch norm layers
+    # https://tehnokv.com/posts/fusing-batchnorm-and-conv/
+    fused_conv = nn.Conv2d(conv.in_channels,
+                           conv.out_channels,
+                           kernel_size=conv.kernel_size,
+                           stride=conv.stride,
+                           padding=conv.padding,
+                           groups=conv.groups,
+                           bias=True).requires_grad_(False).to(conv.weight.device)
 
     # prepare filters
     w_conv = conv.weight.clone().view(conv.out_channels, -1)
     w_bn = torch.diag(bn.weight.div(torch.sqrt(bn.eps + bn.running_var)))
-    fusedconv.weight.copy_(torch.mm(w_bn, w_conv).view(fusedconv.weight.shape))
+    fused_conv.weight.copy_(torch.mm(w_bn, w_conv).view(fused_conv.weight.shape))
 
     # prepare spatial bias
     b_conv = torch.zeros(conv.weight.size(0), device=conv.weight.device) if conv.bias is None else conv.bias
     b_bn = bn.bias - bn.weight.mul(bn.running_mean).div(torch.sqrt(bn.running_var + bn.eps))
-    fusedconv.bias.copy_(torch.mm(w_bn, b_conv.reshape(-1, 1)).reshape(-1) + b_bn)
+    fused_conv.bias.copy_(torch.mm(w_bn, b_conv.reshape(-1, 1)).reshape(-1) + b_bn)
 
-    return fusedconv
+    return fused_conv
 
 
 class Model(nn.Module):
@@ -123,13 +115,13 @@ class Model(nn.Module):
 
         # Define model
         ch = cfg['ch'] = cfg.get('ch', ch)  # input channels
-        if nc and nc != cfg['nc']:
-            cfg['nc'] = nc  # override yaml value
+        if nc and nc != cfg['num_classes']:
+            cfg['num_classes'] = nc  # override yaml value
         if anchors:
             cfg['anchors'] = round(anchors)  # override yaml value
 
         self.model, self.save = parse_model(deepcopy(cfg), ch=[ch])  # model, savelist
-        self.names = [str(i) for i in range(cfg['nc'])]  # default names
+        self.names = [str(i) for i in range(cfg['num_classes'])]  # default names
 
         # Set per
         for m in self.modules():
@@ -247,133 +239,12 @@ class Model(nn.Module):
             b = mi.bias.detach().view(m.na, -1).T  # conv.bias(255) to (3,85)
             print(('%6g Conv2d.bias:' + '%10.3g' * 6) % (mi.weight.shape[1], *b[:5].mean(1).tolist(), b[5:].mean()))
 
-    def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers
-        print('Fusing layers... ')
-        for m in self.model.modules():
-            if isinstance(m, RepConv):
-                # print(f" fuse_repvgg_block")
-                m.fuse_repvgg_block()
-            elif type(m) is Conv and hasattr(m, 'bn'):
-                m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
-                delattr(m, 'bn')  # remove batchnorm
-                m.forward = m.fuseforward  # update forward
-        self.info()
-        return self
-
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
 
-    def detect_image(self, image, image_size=640, crop=False, count=False):
-        # ---------------------------------------------------#
-        #   计算输入图片的高和宽
-        # ---------------------------------------------------#
-        image_shape = np.array(np.shape(image)[0:2])
-
-        # ---------------------------------------------------------#
-        #   给图像增加灰条，实现不失真的resize
-        #   也可以直接resize进行识别
-        # ---------------------------------------------------------#
-        image_data = resize_image(image, (image_size, image_size), True)
-        image_data = image_data / 255.
-        # ---------------------------------------------------------#
-        #   添加上batch_size维度
-        # ---------------------------------------------------------#
-        image_data = np.expand_dims(np.transpose(np.array(image_data, dtype='float32'), (2, 0, 1)), 0)
-
-        with torch.no_grad():
-            images = torch.from_numpy(image_data)
-            if self.cuda:
-                images = images.cuda()
-            # ---------------------------------------------------------#
-            #   将图像输入网络当中进行预测！
-            # ---------------------------------------------------------#
-            outputs = self.net(images)
-            outputs = self.bbox_util.decode_box(outputs)
-            # ---------------------------------------------------------#
-            #   将预测框进行堆叠，然后进行非极大抑制
-            # ---------------------------------------------------------#
-            results = non_max_suppression(torch.cat(outputs, 1), self.num_classes, self.input_shape,
-                                          image_shape, self.letterbox_image, conf_thres=self.confidence,
-                                          nms_thres=self.nms_iou)
-
-            if results[0] is None:
-                return image
-
-            top_label = np.array(results[0][:, 6], dtype='int32')
-            top_conf = results[0][:, 4] * results[0][:, 5]
-            top_boxes = results[0][:, :4]
-        # ---------------------------------------------------------#
-        #   设置字体与边框厚度
-        # ---------------------------------------------------------#
-        font = ImageFont.truetype(font='../resource/simhei.ttf',
-                                  size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
-        thickness = int(max((image.size[0] + image.size[1]) // np.mean(self.input_shape), 1))
-        # ---------------------------------------------------------#
-        #   计数
-        # ---------------------------------------------------------#
-        if count:
-            print("top_label:", top_label)
-            classes_nums = np.zeros([self.num_classes])
-            for i in range(self.num_classes):
-                num = np.sum(top_label == i)
-                if num > 0:
-                    print(self.class_names[i], " : ", num)
-                classes_nums[i] = num
-            print("classes_nums:", classes_nums)
-        # ---------------------------------------------------------#
-        #   是否进行目标的裁剪
-        # ---------------------------------------------------------#
-        if crop:
-            for i, c in list(enumerate(top_boxes)):
-                top, left, bottom, right = top_boxes[i]
-                top = max(0, np.floor(top).astype('int32'))
-                left = max(0, np.floor(left).astype('int32'))
-                bottom = min(image.size[1], np.floor(bottom).astype('int32'))
-                right = min(image.size[0], np.floor(right).astype('int32'))
-
-                dir_save_path = "img_crop"
-                if not os.path.exists(dir_save_path):
-                    os.makedirs(dir_save_path)
-                crop_image = image.crop([left, top, right, bottom])
-                crop_image.save(os.path.join(dir_save_path, "crop_" + str(i) + ".png"), quality=95, subsampling=0)
-                print("save crop_" + str(i) + ".png to " + dir_save_path)
-        # ---------------------------------------------------------#
-        #   图像绘制
-        # ---------------------------------------------------------#
-        for i, c in list(enumerate(top_label)):
-            predicted_class = self.class_names[int(c)]
-            box = top_boxes[i]
-            score = top_conf[i]
-
-            top, left, bottom, right = box
-
-            top = max(0, np.floor(top).astype('int32'))
-            left = max(0, np.floor(left).astype('int32'))
-            bottom = min(image.size[1], np.floor(bottom).astype('int32'))
-            right = min(image.size[0], np.floor(right).astype('int32'))
-
-            label = '{} {:.2f}'.format(predicted_class, score)
-            draw = ImageDraw.Draw(image)
-            label_size = draw.textsize(label, font)
-            label = label.encode('utf-8')
-            print(label, top, left, bottom, right)
-
-            if top - label_size[1] >= 0:
-                text_origin = np.array([left, top - label_size[1]])
-            else:
-                text_origin = np.array([left, top + 1])
-
-            for i in range(thickness):
-                draw.rectangle([left + i, top + i, right - i, bottom - i], outline=self.colors[c])
-            draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=self.colors[c])
-            draw.text(text_origin, str(label, 'UTF-8'), fill=(0, 0, 0), font=font)
-            del draw
-
-        return image
-
 
 def parse_model(d, ch):  # model_dict, input_channels(3)
-    anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
+    anchors, nc, gd, gw = d['anchors'], d['num_classes'], d['depth_multiple'], d['width_multiple']
     na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
     no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
 
@@ -447,37 +318,20 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
     return nn.Sequential(*layers), sorted(save)
 
 
-# ---------------------------------------------------#
-#   对输入图像进行resize
-# ---------------------------------------------------#
-def resize_image(image, size, letterbox_image):
-    iw, ih = image.size
-    w, h = size
-    if letterbox_image:
-        scale = min(w / iw, h / ih)
-        nw = int(iw * scale)
-        nh = int(ih * scale)
-
-        image = image.resize((nw, nh), Image.BICUBIC)
-        new_image = Image.new('RGB', size, (128, 128, 128))
-        new_image.paste(image, ((w - nw) // 2, (h - nh) // 2))
-    else:
-        new_image = image.resize((w, h), Image.BICUBIC)
-    return new_image
-
-
 if __name__ == "__main__":
     from utils.helper_io import check_file, cvt_cfg
-    from utils.helper_torch import select_device, timer
+    from utils.helper_torch import select_device
+
+    ch = 3
 
     _cfg = cvt_cfg(check_file(r"../cfg/net\\yolov7.yaml"))
     _device = select_device(device='0')
 
     # Create model
-    _model = Model(_cfg).to(_device)
+    _model = Model(_cfg, ch=ch).to(_device)
     _model.train()
 
-    _img = torch.rand(1, 3, 640, 640).to(_device)
+    _img = torch.rand(1, ch, 640, 640).to(_device)
     y1, y2, y3 = _model(_img, profile=True)
 
     print("y1:\t{}\r\ny2:\t{}\r\ny3:\t{}".format(tuple(y1.shape), tuple(y2.shape), tuple(y3.shape)))
