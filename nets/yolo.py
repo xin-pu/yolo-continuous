@@ -11,16 +11,6 @@ from nets.idetect import IDetect
 import thop
 
 
-def check_anchor_order(m):
-    a = m.anchor_grid.prod(-1).view(-1)  # anchor area
-    da = a[-1] - a[0]  # delta a
-    ds = m.stride[-1] - m.stride[0]  # delta s
-    if da.sign() != ds.sign():  # same order
-        print('Reversing anchor order')
-        m.anchors[:] = m.anchors.flip(0)
-        m.anchor_grid[:] = m.anchor_grid.flip(0)
-
-
 def make_divisible(x, divisor):
     return math.ceil(x / divisor) * divisor
 
@@ -35,27 +25,6 @@ def initialize_weights(model):
             m.momentum = 0.03
         elif isinstance(m, (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6)):
             m.inplace = True
-
-
-def model_info(model, verbose=False, img_size=640):
-    # Model information. img_size may be int or list, i.e. img_size=640 or img_size=[640, 320]
-    num_parameters = sum(x.numel() for x in model.parameters())
-    num_gradients = sum(x.numel() for x in model.parameters() if x.requires_grad)
-    if verbose:
-        print('%5s %40s %9s %12s %20s %10s %10s' % ('layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
-        for i, (name, p) in enumerate(model.named_parameters()):
-            name = name.replace('module_list.', '')
-            print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
-                  (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
-    try:  # FLOPS
-        from thop import profile
-        stride = max(int(model.stride.max()), 32) if hasattr(model, 'stride') else 32
-        img = torch.zeros((1, model.yaml.get('ch', 3), stride, stride), device=next(model.parameters()).device)  # input
-        flops = profile(deepcopy(model), inputs=(img,), verbose=False)[0] / 1E9 * 2  # stride GFLOPS
-        img_size = img_size if isinstance(img_size, list) else [img_size, img_size]  # expand if int/float
-        fs = ', %.1f GFLOPS' % (flops * img_size[0] / stride * img_size[1] / stride)  # 640x640 GFLOPS
-    except (ImportError, Exception):
-        fs = ''
 
 
 def time_synchronized():
@@ -139,7 +108,7 @@ class Model(nn.Module):
                 elif isinstance(m, (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6)):
                     m.inplace = True
 
-        self.info()
+        self.print_info()
 
     def forward(self, x, augment=False, profile=False):
         if augment:
@@ -239,8 +208,30 @@ class Model(nn.Module):
             b = mi.bias.detach().view(m.na, -1).T  # conv.bias(255) to (3,85)
             print(('%6g Conv2d.bias:' + '%10.3g' * 6) % (mi.weight.shape[1], *b[:5].mean(1).tolist(), b[5:].mean()))
 
-    def info(self, verbose=False, img_size=640):  # print model information
-        model_info(self, verbose, img_size)
+    def print_info(self, img_size=640, detailed=False):  # print model information
+        """
+        打印网络信息
+        :param img_size:may be int or list, i.e. img_size=640 or img_size=[640, 320]
+        :param detailed:
+        """
+        num_parameters = sum(x.numel() for x in self.parameters())
+        num_gradients = sum(x.numel() for x in self.parameters() if x.requires_grad)
+        if detailed:
+            print('%5s %40s %9s %12s %20s %10s %10s' % (
+                'layer', 'name', 'gradient', 'parameters', 'shape', 'mu', 'sigma'))
+            for i, (name, p) in enumerate(self.named_parameters()):
+                name = name.replace('module_list.', '')
+                print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
+                      (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
+        try:  # FLOPS
+            from thop import profile
+            stride = max(int(self.stride.max()), 32) if hasattr(self, 'stride') else 32
+            img = torch.zeros((1, self.yaml.get('ch', 3), stride, stride), device=next(self.parameters()).device)
+            flops = profile(deepcopy(self), inputs=(img,), verbose=False)[0] / 1E9 * 2  # stride GFLOPS
+            img_size = img_size if isinstance(img_size, list) else [img_size, img_size]  # expand if int/float
+            fs = ', %.1f GFLOPS' % (flops * img_size[0] / stride * img_size[1] / stride)  # 640x640 GFLOPS
+        except (ImportError, Exception):
+            fs = ''
 
 
 def parse_model(d, ch):  # model_dict, input_channels(3)
