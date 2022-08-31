@@ -11,6 +11,14 @@ from utils.bbox import cvt_bbox, CvtFlag
 from utils.helper_io import cvt_cfg
 
 
+# Keypoint 数据裁剪函数，其实将一个batch下不同数量的Label,Box 以序号做索引拼接成一个张量
+def collate_fn(batch):
+    img, label = zip(*batch)  # transposed
+    for i, l in enumerate(label):
+        l[:, 0] = i  # add target image index for build_targets()
+    return torch.stack(img, 0), torch.cat(label, 0)
+
+
 class YoloDataset(Dataset):
 
     def __init__(self,
@@ -76,14 +84,6 @@ class YoloDataset(Dataset):
             info += "{}:\t{}\r\n".format(key, value)
         return info
 
-    # Keypoint 数据裁剪函数，其实将一个batch下不同数量的Label,Box 以序号做索引拼接成一个张量
-    @staticmethod
-    def collate_fn(batch):
-        img, label = zip(*batch)  # transposed
-        for i, l in enumerate(label):
-            l[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(img, 0), torch.cat(label, 0)
-
 
 if __name__ == "__main__":
     _data_cfg = cvt_cfg("../cfg/raccoon_train.yaml")
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     dataset = YoloDataset(_data_cfg, _enhance_cfg)
     dataloader = InfiniteDataLoader(dataset, batch_size=_data_cfg["batch_size"],
                                     shuffle=False,
-                                    collate_fn=YoloDataset.collate_fn)
+                                    collate_fn=collate_fn)
 
     pbar = tqdm(dataloader)
     for images, targets in pbar:

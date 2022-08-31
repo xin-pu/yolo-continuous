@@ -21,7 +21,6 @@ class Detect(nn.Module):
         self.yolo_head_P4 = nn.Conv2d(ch[1], self.na * self.no, 1)
         self.yolo_head_P5 = nn.Conv2d(ch[2], self.na * self.no, 1)
 
-
         for m in self.modules():
             if isinstance(m, (nn.Conv2d, nn.Linear)):
                 nn.init.normal_(m.weight, 0, 0.01)

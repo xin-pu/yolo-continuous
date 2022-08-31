@@ -5,9 +5,11 @@ val: F:\Raccoon\val.txt
 epochs: 100
 batch_size: 4
 image_size: 640
-enhance: False
+enhance: True
 shuffle: True
-workers: 8 # maximum number of dataloader workers
+pin_memory: True
+drop_last: True
+workers: 4 # maximum number of dataloader workers
 
 enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
 model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
