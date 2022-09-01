@@ -35,7 +35,7 @@ class TrainPlan(object):
         self.model_cfg = cfg['model_cfg']
 
         self.anchors = cfg['anchors']
-        self.anchor_mask = cfg['anchors_mask']
+        self.anchors_mask = cfg['anchors_mask']
 
         # 优化器信息
         self.adam = cfg['adam']

@@ -7,7 +7,7 @@ from torch.cuda import amp
 from copy import deepcopy
 from tqdm import tqdm
 
-from dataset.data_loader import get_dataloader
+from main.data_loader import get_dataloader
 from main.learningrate_scheduler import *
 from losses.yolo_loss import YOLOLoss
 from main.warm_up import warm_up
@@ -79,11 +79,9 @@ def print_title(title):
 
 
 def train(train_cfg_file):
-    device = select_device(device='0')
-
     print_title("0. 加载计划")
-    train_cfg = cvt_cfg(train_cfg_file)
     plan = TrainPlan(train_cfg_file)
+    device = select_device(device=plan.device)
     print(plan)
 
     print_title("1. 构造模型")
@@ -112,12 +110,12 @@ def train(train_cfg_file):
     test_dataloader = get_dataloader(plan.cfg_file, False)
 
     print_title("5. 训练")
-    epochs = train_cfg["epochs"]
+    epochs = plan.epochs
     iterations_each_epoch = len(train_dataloader)
     iterations_limit = max(plan.warmup_max_iter, iterations_each_epoch * plan.warmup_epochs)
     mean_val_loss_his = []
 
-    for epoch in range(0, plan.epochs):
+    for epoch in range(0, epochs):
         pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch, ncols=120, colour='#FFFFFF')
 
         loss_sum, mean_loss = 0, 0
@@ -170,7 +168,7 @@ def train(train_cfg_file):
         pbar.close()
 
         if mean_val_loss <= min(mean_val_loss_his):
-            path = os.path.join(train_cfg['save_dir'], "best.pt")
+            path = os.path.join(plan.save_dir, "{}.pt".format(plan.save_name))
             ckpt = {'epoch': epoch,
                     'model': deepcopy(net),
                     'optimizer': optimizer.state_dict()}
@@ -180,5 +178,5 @@ def train(train_cfg_file):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
+    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
     train(_train_cfg_file)
