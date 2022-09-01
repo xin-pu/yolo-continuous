@@ -135,6 +135,7 @@ class Model(nn.Module):
                                                                              'shape', 'mu', 'sigma'))
         for i, (name, p) in enumerate(self.named_parameters()):
             name = name.replace('module_list.', '')
+            # noinspection PyArgumentList
             print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
                   (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
         print('total parameters: {0:7g} total gradients: {1:7g}'.format(num_parameters, num_gradients))
@@ -143,6 +144,7 @@ class Model(nn.Module):
         y = []
         for m in self.model:
             if m.f != -1:  # if not from previous layer
+                # noinspection PyTypeChecker
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
 
             x = m(x)  # run

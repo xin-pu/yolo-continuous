@@ -72,31 +72,37 @@ class ModelEMA:
         copy_attr(self.ema, model, include, exclude)
 
 
+def print_title(title):
+    print("{0}{1:40s}{2}".format("-" * 20, title, "-" * 20))
+
+
 def train(train_cfg_file):
-    train_cfg = cvt_cfg(train_cfg_file)
     device = select_device(device='0')
 
-    # Step 1 Create Model
-    print("Step 1 Create Model")
-    model_cfg = cvt_cfg(check_file(train_cfg['model_cfg']))
-    num_classes = label_num = train_cfg["num_labels"]
-    anchors = train_cfg['anchors']
-    image_chan = train_cfg['image_chan']
+    train_cfg = cvt_cfg(train_cfg_file)
+    num_classes, anchors = train_cfg["num_labels"], train_cfg['anchors'],
+    image_size, image_chan = train_cfg["image_size"], train_cfg['image_chan']
+    model_cfg_file = train_cfg['model_cfg']
+
+    print_title("1. 构造模型")
+    model_cfg = cvt_cfg(check_file(model_cfg_file))
     net = Model(model_cfg, anchors, num_classes, image_chan=image_chan, weight_initial=WeightInitial.Random).to(device)
     # Todo Resume
 
-    # Step 2 Create Optimizer
-    optimizer = get_optimizer(net, train_cfg)  # 以LrI作为初始学习率
-    learning_rate_scheduler = get_lr_scheduler(optimizer, 1, train_cfg["lrF"], LearningSchedule.CosineDecay)
+    print_title("2. 构造优化器")
+    optimizer = get_optimizer(net, train_cfg)
+    learning_rate_scheduler = get_lr_scheduler(optimizer, train_cfg["lrF"], train_cfg["epochs"],
+                                               LearningSchedule.CosineDecay)
     scaler = amp.GradScaler(enabled=True)
 
+    print_title("3. 构造损失函数")
+    anchors = np.array(anchors).reshape(-1, 2)
+    yolo_loss = YOLOLoss(anchors, num_classes, (image_size, image_size))
+
     # Step 3 DataLoader
+    print_title("4. 构造数据集")
     train_dataloader = get_dataloader(train_cfg, True)
     test_dataloader = get_dataloader(train_cfg, False)
-
-    # Step 4 Loss
-    anchors = np.array(train_cfg['anchors']).reshape(-1, 2)
-    yolo_loss = YOLOLoss(anchors, label_num, (640, 640))
 
     # Step 5 Train
     epochs = train_cfg["epochs"]

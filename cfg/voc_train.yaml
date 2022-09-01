@@ -5,6 +5,7 @@ val: F:\PASCALVOC\val.txt
 epochs: 100
 batch_size: 8
 image_size: 640
+image_chan: 3
 enhance: True
 shuffle: True
 pin_memory: True
