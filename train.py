@@ -6,6 +6,8 @@ import torch
 from torch.cuda import amp
 from copy import deepcopy
 from tqdm import tqdm
+
+from cfg.train_plan import TrainPlan
 from dataset.data_loader import get_dataloader
 from utils.learningrate_scheduler import *
 from losses.yolo_loss import YOLOLoss
@@ -73,47 +75,52 @@ class ModelEMA:
 
 
 def print_title(title):
-    print("{0}{1:40s}{2}".format("-" * 20, title, "-" * 20))
+    print("{0}{1:30s}{2}".format("-" * 20, title, "-" * 20))
 
 
 def train(train_cfg_file):
     device = select_device(device='0')
 
+    print_title("0. 加载计划")
     train_cfg = cvt_cfg(train_cfg_file)
-    num_classes, anchors = train_cfg["num_labels"], train_cfg['anchors'],
-    image_size, image_chan = train_cfg["image_size"], train_cfg['image_chan']
-    model_cfg_file = train_cfg['model_cfg']
+    plan = TrainPlan(train_cfg_file)
+    print(plan)
 
     print_title("1. 构造模型")
-    model_cfg = cvt_cfg(check_file(model_cfg_file))
-    net = Model(model_cfg, anchors, num_classes, image_chan=image_chan, weight_initial=WeightInitial.Random).to(device)
+    model_cfg = cvt_cfg(check_file(plan.model_cfg))
+    net = Model(model_cfg,
+                plan.anchors,
+                plan.num_labels,
+                image_chan=plan.image_chan,
+                weight_initial=WeightInitial.Random).to(device)
+    net.print_info()
+    model_train = torch.nn.DataParallel(net)
     # Todo Resume
 
     print_title("2. 构造优化器")
     optimizer = get_optimizer(net, train_cfg)
-    learning_rate_scheduler = get_lr_scheduler(optimizer, train_cfg["lrF"], train_cfg["epochs"],
+    print(optimizer)
+    learning_rate_scheduler = get_lr_scheduler(optimizer, train_cfg["lrF"],
+                                               train_cfg["epochs"],
                                                LearningSchedule.CosineDecay)
     scaler = amp.GradScaler(enabled=True)
 
     print_title("3. 构造损失函数")
-    anchors = np.array(anchors).reshape(-1, 2)
-    yolo_loss = YOLOLoss(anchors, num_classes, (image_size, image_size))
+    anchors = np.array(plan.anchors).reshape(-1, 2)
+    yolo_loss = YOLOLoss(anchors, plan.num_labels, (plan.image_size, plan.image_size))
 
-    # Step 3 DataLoader
     print_title("4. 构造数据集")
-    train_dataloader = get_dataloader(train_cfg, True)
-    test_dataloader = get_dataloader(train_cfg, False)
+    train_dataloader = get_dataloader(plan.cfg_file, True)
+    test_dataloader = get_dataloader(plan.cfg_file, False)
 
-    # Step 5 Train
+    print_title("5. 训练")
     epochs = train_cfg["epochs"]
     iterations_each_epoch = len(train_dataloader)
     mean_val_loss_his = []
 
-    model_train = torch.nn.DataParallel(net)
-
     for epoch in range(0, epochs):
 
-        pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch, ncols=100, colour='#FFFFFF')
+        pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch, ncols=120, colour='#FFFFFF')
         optimizer.zero_grad()
         loss_sum, mean_loss = 0, 0
         val_loss_sum, mean_val_loss = 0, 0
@@ -136,12 +143,13 @@ def train(train_cfg_file):
             # Print
             loss_sum += loss.item()
             mean_loss = loss_sum / (i + 1)
-            msg = "Epoch:{:05d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tlr:{:>.5f}".format(epoch, i, iterations_total,
-                                                                                            mean_loss,
-                                                                                            get_lr(optimizer))
+            msg = "Epoch:{:03d}/{:03d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tlr:{:>.5f}".format(epoch+1, epochs, i,
+                                                                                                   iterations_total,
+                                                                                                   mean_loss,
+                                                                                                   get_lr(optimizer))
             pbar.set_description(msg)
 
-        for i, (images, targets) in enumerate(test_dataloader):
+        for j, (images, targets) in enumerate(test_dataloader):
             images = images.to(device, non_blocking=True).float()
             targets = targets.to(device)
             with amp.autocast(enabled=True):
