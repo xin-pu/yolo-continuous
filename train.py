@@ -98,16 +98,14 @@ def train(train_cfg_file):
     # Todo Resume
 
     print_title("2. 构造优化器")
-    optimizer = get_optimizer(net, train_cfg)
-    print(optimizer)
-    learning_rate_scheduler = get_lr_scheduler(optimizer, train_cfg["lrF"],
-                                               train_cfg["epochs"],
-                                               LearningSchedule.CosineDecay)
+    optimizer = get_optimizer(net, plan)
+    learning_rate_scheduler = get_lr_scheduler(optimizer, plan)
     scaler = amp.GradScaler(enabled=True)
 
     print_title("3. 构造损失函数")
     anchors = np.array(plan.anchors).reshape(-1, 2)
     yolo_loss = YOLOLoss(anchors, plan.num_labels, (plan.image_size, plan.image_size))
+    print(yolo_loss)
 
     print_title("4. 构造数据集")
     train_dataloader = get_dataloader(plan.cfg_file, True)
@@ -118,20 +116,20 @@ def train(train_cfg_file):
     iterations_each_epoch = len(train_dataloader)
     mean_val_loss_his = []
 
-    for epoch in range(0, epochs):
-
+    for epoch in range(0, plan.epochs):
         pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch, ncols=120, colour='#FFFFFF')
-        optimizer.zero_grad()
+
         loss_sum, mean_loss = 0, 0
         val_loss_sum, mean_val_loss = 0, 0
+        optimizer.zero_grad()
 
         for i, (images, targets) in pbar:
             iterations_total = i + epoch * iterations_each_epoch
             images = images.to(device).float()
             targets = targets.to(device)
             with amp.autocast(enabled=True):
-                pred = model_train(images)  # forward
-                loss = yolo_loss(pred, targets, images)  # loss scaled by batch_size
+                pred = model_train(images)
+                loss = yolo_loss(pred, targets, images)
 
             scaler.scale(loss).backward()
 
@@ -143,11 +141,15 @@ def train(train_cfg_file):
             # Print
             loss_sum += loss.item()
             mean_loss = loss_sum / (i + 1)
-            msg = "Epoch:{:03d}/{:03d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tlr:{:>.5f}".format(epoch+1, epochs, i,
-                                                                                                   iterations_total,
-                                                                                                   mean_loss,
-                                                                                                   get_lr(optimizer))
+            msg = "  Epoch:{:03d}/{:03d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tlr:{:>.6f}".format(epoch + 1,
+                                                                                                     epochs,
+                                                                                                     i,
+                                                                                                     iterations_total,
+                                                                                                     mean_loss,
+                                                                                                     get_lr(optimizer))
             pbar.set_description(msg)
+
+        learning_rate_scheduler.step()
 
         for j, (images, targets) in enumerate(test_dataloader):
             images = images.to(device, non_blocking=True).float()
@@ -169,8 +171,6 @@ def train(train_cfg_file):
             torch.save(ckpt, path)
             print("Epoch {:05d} Val Loss:{:>.4f} save to {}\r\n".format(epoch, mean_val_loss, path))
         time.sleep(0.2)
-
-        learning_rate_scheduler.step()
 
 
 if __name__ == "__main__":

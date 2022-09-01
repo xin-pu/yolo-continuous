@@ -21,7 +21,7 @@ class TrainPlan(object):
         self.image_chan = cfg['image_chan']
         self.labels = cfg['labels']
         self.num_labels = len(self.labels)
-
+        self.epochs = cfg['epochs']
         self.batch_size = cfg['batch_size']
         self.shuffle = cfg['shuffle']
         self.workers = cfg['workers']
@@ -36,6 +36,19 @@ class TrainPlan(object):
 
         self.anchors = cfg['anchors']
         self.anchor_mask = cfg['anchors_mask']
+
+        # 优化器信息
+        self.adam = cfg['adam']
+        self.decay = cfg['decay']
+        self.learn_initial = cfg['lrI']
+        self.learn_final = cfg['lrF']
+        self.momentum = cfg['momentum']
+        self.weight_decay = cfg['weight_decay']
+
+        # 保存信息
+        self.resume = cfg['resume']
+        self.save_dir = cfg['save_dir']
+        self.save_name = cfg['save_name']
 
     @staticmethod
     def get_dataset_cfg(cfg_file):

@@ -11,17 +11,17 @@ shuffle: True
 pin_memory: True
 drop_last: True
 workers: 4 # maximum number of dataloader workers
-
-enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
-model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
-
-num_labels: 20
-anchors: [ [ 12,16, 19,36, 40,28 ], [ 36,75, 76,55, 72,146 ], [ 142,110, 192,243, 459,401 ] ]
-anchors_mask: [ [ 6, 7, 8 ], [ 3, 4, 5 ], [ 0, 1, 2 ] ]
 labels: [ "aeroplane",  "bicycle", "bird", "boat","bottle",
           "bus",    "car",  "cat",   "chair",   "cow",
           "diningtable",  "dog",  "horse",  "motorbike",  "person",
           "pottedplant", "sheep",   "sofa", "train", "tvmonitor" ]
+
+enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
+model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
+
+anchors: [ [ 12,16, 19,36, 40,28 ], [ 36,75, 76,55, 72,146 ], [ 142,110, 192,243, 459,401 ] ]
+anchors_mask: [ [ 6, 7, 8 ], [ 3, 4, 5 ], [ 0, 1, 2 ] ]
+
 
 
 iou_loss_ratio: 1.0
@@ -35,14 +35,17 @@ anchor_t: 4.0  # anchor-multiple threshold
 fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
 
 adam: False # use torch.optim.Adam() optimizer
-decay: Cosine
+decay: Cosine # NA,Linear, InverseTime,Exponential,Natural_Exponential,Cosine
 lrI: 0.001 # initial learning rate (SGD=1E-2, Adam=1E-3)
 lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
+warmup: True
+warmup_epochs: 3.0  # warmup epochs (fractions ok)
+warmup_momentum: 0.8  # warmup initial momentum
+warmup_bias_lr: 0.1  # warmup initial bias lr
 
 
 resume: True
 save_dir: F:\SaveModels\Yolo\
 save_name: voc.pt
-save_period: 1
