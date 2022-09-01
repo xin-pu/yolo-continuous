@@ -2,7 +2,6 @@ import math
 from enum import Enum
 
 from torch.optim import lr_scheduler
-
 from cfg.train_plan import TrainPlan
 from utils.helper_torch import timer
 
@@ -96,6 +95,8 @@ def get_lr_scheduler(optimizer, plan: TrainPlan):
     scheduler.name = decay
     # print(scheduler.get_lr()[0])
     return scheduler
+
+
 
 
 if __name__ == "__main__":

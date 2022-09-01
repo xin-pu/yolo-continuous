@@ -1,13 +1,12 @@
-import numpy as np
-import torch
 import yaml
+import numpy as np
 from torch.nn import Module
 from torchvision.transforms import *
 
-from image_enhance.component.random_flip import RandomFlip
-from image_enhance.component.letter_box import LetterBox
-from image_enhance.component.augment_hsv import RandomHSV
-from image_enhance.component.random_perspective import RandomPerspective
+from image_enhance.random_flip import RandomFlip
+from image_enhance.letter_box import LetterBox
+from image_enhance.augment_hsv import RandomHSV
+from image_enhance.random_perspective import RandomPerspective
 
 
 class EnhancePackage(Module):

@@ -7,12 +7,12 @@ from torch.cuda import amp
 from copy import deepcopy
 from tqdm import tqdm
 
-from cfg.train_plan import TrainPlan
 from dataset.data_loader import get_dataloader
-from utils.learningrate_scheduler import *
+from main.learningrate_scheduler import *
 from losses.yolo_loss import YOLOLoss
+from main.warm_up import warm_up
 from nets.yolo import Model, WeightInitial
-from utils.optimizer import *
+from main.optimizer import *
 from utils.helper_io import check_file, cvt_cfg
 from utils.helper_torch import select_device
 
@@ -114,6 +114,7 @@ def train(train_cfg_file):
     print_title("5. 训练")
     epochs = train_cfg["epochs"]
     iterations_each_epoch = len(train_dataloader)
+    iterations_limit = max(plan.warmup_max_iter, iterations_each_epoch * plan.warmup_epochs)
     mean_val_loss_his = []
 
     for epoch in range(0, plan.epochs):
@@ -127,6 +128,11 @@ def train(train_cfg_file):
             iterations_total = i + epoch * iterations_each_epoch
             images = images.to(device).float()
             targets = targets.to(device)
+
+            # 学习率预热
+            if plan.warmup and epoch < plan.warmup_epochs and iterations_total < iterations_limit:
+                warm_up(optimizer, plan, iterations_total, iterations_limit)
+
             with amp.autocast(enabled=True):
                 pred = model_train(images)
                 loss = yolo_loss(pred, targets, images)
@@ -174,5 +180,5 @@ def train(train_cfg_file):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
+    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
     train(_train_cfg_file)

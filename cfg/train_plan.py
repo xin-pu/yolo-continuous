@@ -44,6 +44,11 @@ class TrainPlan(object):
         self.learn_final = cfg['lrF']
         self.momentum = cfg['momentum']
         self.weight_decay = cfg['weight_decay']
+        self.warmup = cfg['warmup']
+        self.warmup_epochs = cfg['warmup_epochs']
+        self.warmup_max_iter = cfg['warmup_max_iter']
+        self.warmup_momentum = cfg['warmup_momentum']
+        self.warmup_bias_lr = cfg['warmup_bias_lr']
 
         # 保存信息
         self.resume = cfg['resume']

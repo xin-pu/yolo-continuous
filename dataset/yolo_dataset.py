@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from dataset.infinite_dataLoader import InfiniteDataLoader
-from image_enhance.enhance_package import EnhancePackage
+from main.enhance_package import EnhancePackage
 from utils.bbox import cvt_bbox, CvtFlag
 from utils.helper_io import cvt_cfg
 
