@@ -5,17 +5,18 @@ val: F:\Raccoon\val.txt
 epochs: 100
 batch_size: 4
 image_size: 640
+image_chan: 3
 enhance: True
 shuffle: True
 pin_memory: True
 drop_last: True
-workers: 4 # maximum number of dataloader workers
+workers: 4
 
 enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
 model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
 
 num_labels: 1
-anchors: [ [ 12,16, 19,36, 40,28 ], [ 36,75, 76,55, 72,146 ], [ 142,110, 192,243, 459,401 ] ]
+anchors: [ [12,16, 19,36, 40,28 ], [36,75, 76,55, 72,146] ,  [142,110, 192,243, 459,401 ]]
 anchors_mask: [ [ 6, 7, 8 ], [ 3, 4, 5 ], [ 0, 1, 2 ] ]
 labels: [ "raccoon" ]
 

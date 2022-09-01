@@ -9,7 +9,7 @@ from tqdm import tqdm
 from dataset.data_loader import get_dataloader
 from utils.learningrate_scheduler import *
 from losses.yolo_loss import YOLOLoss
-from nets.yolo import Model
+from nets.yolo import Model, WeightInitial
 from utils.optimizer import *
 from utils.helper_io import check_file, cvt_cfg
 from utils.helper_torch import select_device
@@ -79,9 +79,10 @@ def train(train_cfg_file):
     # Step 1 Create Model
     print("Step 1 Create Model")
     model_cfg = cvt_cfg(check_file(train_cfg['model_cfg']))
-    model_cfg["num_classes"] = label_num = train_cfg["num_labels"]
-    model_cfg['anchors'] = train_cfg['anchors']
-    net = Model(model_cfg, random_initial=True).to(device)
+    num_classes = label_num = train_cfg["num_labels"]
+    anchors = train_cfg['anchors']
+    image_chan = train_cfg['image_chan']
+    net = Model(model_cfg, anchors, num_classes, image_chan=image_chan, weight_initial=WeightInitial.Random).to(device)
     # Todo Resume
 
     # Step 2 Create Optimizer
