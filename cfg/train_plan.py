@@ -3,7 +3,7 @@ Author: Xin.PU
 Email: Pu.Xin@outlook.com
 Time: 2022/9/1 10:26
 """
-import numpy as np
+import os
 import yaml
 
 
@@ -12,7 +12,7 @@ class TrainPlan(object):
     def __init__(self, cfg_file):
         self.cfg_file = cfg = self.get_dataset_cfg(cfg_file)
 
-        self.device = cfg['device']
+        self.device = "{}".format(cfg['device'])
 
         # 数据集信息
         self.train_indexes = cfg['train']
@@ -54,6 +54,7 @@ class TrainPlan(object):
         self.resume = cfg['resume']
         self.save_dir = cfg['save_dir']
         self.save_name = cfg['save_name']
+        self.save_path = os.path.join(self.save_dir, "{}.pth".format(self.save_name))
 
     @staticmethod
     def get_dataset_cfg(cfg_file):
