@@ -3,6 +3,8 @@ import os
 import cv2
 import numpy as np
 import torch
+from PIL import ImageFont, ImageDraw
+from PIL import Image
 from torchvision.ops import nms
 
 from cfg.train_plan import TrainPlan
@@ -170,21 +172,62 @@ def non_max_suppression(prediction,
         for c in unique_labels:
             detections_class = detections[detections[:, -1] == c]
 
-            keep = nms(
-                detections_class[:, :4],
-                detections_class[:, 4] * detections_class[:, 5],
-                nms_thres
-            )
+            keep = nms(detections_class[:, :4], detections_class[:, 4] * detections_class[:, 5], nms_thres)
             max_detections = detections_class[keep]
 
             # Add max detections to outputs
             output[i] = max_detections if output[i] is None else torch.cat((output[i], max_detections))
 
+        if output[i] is not None:
+            output[i] = output[i].cpu().numpy()
+            box_xy, box_wh = (output[i][:, 0:2] + output[i][:, 2:4]) / 2, output[i][:, 2:4] - output[i][:, 0:2]
+            output[i][:, :4] = yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
+
     return output
 
 
+def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image):
+    box_yx = box_xy[..., ::-1]
+    box_hw = box_wh[..., ::-1]
+    input_shape = np.array(input_shape)
+    image_shape = np.array(image_shape)
+
+    if letterbox_image:
+        new_shape = np.round(image_shape * np.min(input_shape / image_shape))
+        offset = (input_shape - new_shape) / 2. / input_shape
+        scale = input_shape / new_shape
+
+        box_yx = (box_yx - offset) * scale
+        box_hw *= scale
+
+    box_mins = box_yx - (box_hw / 2.)
+    box_maxes = box_yx + (box_hw / 2.)
+    boxes = np.concatenate([box_mins[..., 0:1], box_mins[..., 1:2], box_maxes[..., 0:1], box_maxes[..., 1:2]], axis=-1)
+    boxes *= np.concatenate([image_shape, image_shape], axis=-1)
+    return boxes
+
+
+# ---------------------------------------------------#
+#   对输入图像进行resize
+# ---------------------------------------------------#
+def resize_image(image, size, letterbox_image):
+    iw, ih = image.size
+    w, h = size
+    if letterbox_image:
+        scale = min(w / iw, h / ih)
+        nw = int(iw * scale)
+        nh = int(ih * scale)
+
+        image = image.resize((nw, nh), Image.BICUBIC)
+        new_image = Image.new('RGB', size, (128, 128, 128))
+        new_image.paste(image, ((w - nw) // 2, (h - nh) // 2))
+    else:
+        new_image = image.resize((w, h), Image.BICUBIC)
+    return new_image
+
+
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
+    _train_cfg_file = check_file(r"cfg/coco_train.yaml")
     plan = TrainPlan(_train_cfg_file)
     device = select_device(device='0')
 
@@ -193,25 +236,60 @@ if __name__ == "__main__":
     path = os.path.join(plan.save_dir, "{}.pt".format(plan.save_name))
     ckpt = torch.load(path, map_location=device)
     net = YoloBody(plan.anchors_mask, 80, 'l').cuda()
-    net.load_state_dict(torch.load(r"D:\Download\yolov7_weights.pth"))
+    net.load_state_dict(torch.load(r"resource\yolov7_weights.pth"))
+    net = net.fuse().eval()
 
-    image_file = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\004545.jpg"
-    image = cv2.imread(image_file)
-    image = LetterBox()(np.array(image), [[0, 0, 0, 0]])[0]
+    image_file = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\OIP-C.png"
+    image = Image.open(image_file)
+    image_shape = np.array(np.shape(image)[0:2])
+    image_data = resize_image(image, (plan.image_size, plan.image_size), True)
+    image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
 
     with torch.no_grad():
-        image = image.astype(np.float32) / 255
-        image = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(device)
-        outputs = net(image)
+        images = torch.from_numpy(image_data).to(device)
+        outputs = net(images)
         anchors = np.asarray(plan.anchors).reshape(-1, 2)
         anchors_mask = plan.anchors_mask
         outputs = decode_box(outputs, anchors, anchors_mask, 80, image_size=(640, 640))
         all_outputs = torch.cat(outputs, 1)
-        results = non_max_suppression(all_outputs, 80, (640, 640), (640, 640),
-                                      image,
+        results = non_max_suppression(all_outputs, 80, (640, 640), image_shape,
+                                      True,
                                       conf_thres=0.5,
-                                      nms_thres=0.5)
+                                      nms_thres=0.3)
+        print(results)
 
         top_label = np.array(results[0][:, 6], dtype='int32')
-        top_conf = results[0][:, 4] * results[0][:, 5]
+        top_conf = (results[0][:, 4] * results[0][:, 5])
         top_boxes = results[0][:, :4]
+
+        thickness = int(max((image.size[0] + image.size[1]) // np.mean(640), 1))
+
+        for i, c in list(enumerate(top_label)):
+            predicted_class = plan.labels[int(c)]
+            box = top_boxes[i]
+            score = top_conf[i]
+
+            top, left, bottom, right = box
+
+            top = max(0, np.floor(top).astype('int32'))
+            left = max(0, np.floor(left).astype('int32'))
+            bottom = min(image.size[1], np.floor(bottom).astype('int32'))
+            right = min(image.size[0], np.floor(right).astype('int32'))
+
+            label = '{} {:.2f}'.format(predicted_class, score)
+            draw = ImageDraw.Draw(image)
+            label_size = draw.textsize(label)
+            label = label.encode('utf-8')
+            print(label, top, left, bottom, right)
+
+            if top - label_size[1] >= 0:
+                text_origin = np.array([left, top - label_size[1]])
+            else:
+                text_origin = np.array([left, top + 1])
+
+            for i in range(thickness):
+                draw.rectangle([left + i, top + i, right - i, bottom - i])
+            draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)])
+            draw.text(text_origin, str(label, 'UTF-8'), fill=(0, 0, 0))
+            del draw
+        image.show()

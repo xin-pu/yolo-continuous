@@ -81,7 +81,7 @@ def print_title(title):
 def train(train_cfg_file):
     print_title("0. 加载计划")
     plan = TrainPlan(train_cfg_file)
-    device = select_device(device=plan.device)
+    device = select_device(device="{}".format(plan.device))
     print(plan)
 
     print_title("1. 构造模型")
@@ -168,11 +168,8 @@ def train(train_cfg_file):
         pbar.close()
 
         if mean_val_loss <= min(mean_val_loss_his):
-            path = os.path.join(plan.save_dir, "{}.pt".format(plan.save_name))
-            ckpt = {'epoch': epoch,
-                    'model': deepcopy(net),
-                    'optimizer': optimizer.state_dict()}
-            torch.save(ckpt, path)
+            path = os.path.join(plan.save_dir, "{}.pth".format(plan.save_name))
+            torch.save(net.state_dict(), path)
             print("Epoch {:05d} Val Loss:{:>.4f} save to {}\r\n".format(epoch, mean_val_loss, path))
         time.sleep(0.2)
 
