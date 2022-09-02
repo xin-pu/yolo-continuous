@@ -2,7 +2,7 @@ device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
 
 train: F:\Raccoon\train.txt
 val: F:\Raccoon\val.txt
-epochs: 100
+epochs: 200
 batch_size: 4
 image_size: 640
 image_chan: 3
@@ -11,7 +11,8 @@ shuffle: True
 pin_memory: True
 drop_last: True
 workers: 4
-labels: [ "raccoon" ]
+labels: [ "raccoon","","","","",
+          "","","","","","","","","","","","","","","" ]
 
 enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
 model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
@@ -37,7 +38,7 @@ lrI: 0.001 # initial learning rate (SGD=1E-2, Adam=1E-3)
 lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
-warmup: False
+warmup: True
 warmup_epochs: 3 # warmup epochs (fractions ok)
 warmup_max_iter: 1000 # max warmup iterations
 warmup_momentum: 0.8  # warmup initial momentum

@@ -10,6 +10,7 @@ from torchvision.ops import nms
 
 from cfg.train_plan import TrainPlan
 from image_enhance.letter_box import LetterBox
+from nets.yolo import Model, WeightInitial
 from nets.yolo_net import YoloBody
 from utils.bbox import BBoxType
 from utils.helper_cv import show_bbox
@@ -230,9 +231,18 @@ def resize_image(image, size, letterbox_image):
 
 
 def prepare_model(plan: TrainPlan):
+    # cfg = cvt_cfg(plan.model_cfg)
+    # net = Model(cfg,
+    #             plan.anchors,
+    #             plan.num_labels,
+    #             image_chan=plan.image_chan,
+    #             weight_initial=WeightInitial.Random)
     net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
-    net.load_state_dict(torch.load(plan.save_path))
-    # net = net.fuse().eval()
+    net.load_state_dict(torch.load(r"E:\ObjectDetect\yolov7_pytorch\logs\best_epoch_weights.pth"))
+    #   Keypoint 不启用 BatchNormalization 和 Dropout，保证BN和dropout不发生变化，pytorch框架会自动把BN和Dropout固定住，不会取平均
+    #    而是用训练好的值，不然的话，一旦test的batch_size过小，很容易就会被BN层影响结果。
+    # https://blog.csdn.net/wuqingshan2010/article/details/106013660
+    net = net.eval()
     return net
 
 
@@ -244,8 +254,8 @@ def prepare_test_image(image_path):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/coco_train.yaml")
-    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\002341.jpg"
+    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
+    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jfif"
 
     _plan = TrainPlan(_train_cfg_file)
     _device = select_device(device=_plan.device)
@@ -268,14 +278,15 @@ if __name__ == "__main__":
                                       True,
                                       conf_thres=0.5,
                                       nms_thres=0.3)
+        print(results)
+        if results[0] is not None:
+            top_label = np.array(results[0][:, 6], dtype='int32')
+            top_conf = (results[0][:, 4] * results[0][:, 5])
+            top_boxes_yxyx = results[0][:, :4]
+            top_boxes_xyxy = np.empty_like(top_boxes_yxyx)
+            top_boxes_xyxy[..., 0] = top_boxes_yxyx[..., 1]
+            top_boxes_xyxy[..., 1] = top_boxes_yxyx[..., 0]
+            top_boxes_xyxy[..., 2] = top_boxes_yxyx[..., 3]
+            top_boxes_xyxy[..., 3] = top_boxes_yxyx[..., 2]
 
-        top_label = np.array(results[0][:, 6], dtype='int32')
-        top_conf = (results[0][:, 4] * results[0][:, 5])
-        top_boxes_yxyx = results[0][:, :4]
-        top_boxes_xyxy = np.empty_like(top_boxes_yxyx)
-        top_boxes_xyxy[..., 0] = top_boxes_yxyx[..., 1]
-        top_boxes_xyxy[..., 1] = top_boxes_yxyx[..., 0]
-        top_boxes_xyxy[..., 2] = top_boxes_yxyx[..., 3]
-        top_boxes_xyxy[..., 3] = top_boxes_yxyx[..., 2]
-
-        show_bbox(cv2.imread(_test_img), top_boxes_xyxy, bbox_mode=BBoxType.XYXY)
+            show_bbox(cv2.imread(_test_img), top_boxes_xyxy, bbox_mode=BBoxType.XYXY)

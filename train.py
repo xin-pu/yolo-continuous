@@ -1,4 +1,3 @@
-import os
 import time
 
 import numpy as np
@@ -13,6 +12,7 @@ from losses.yolo_loss import YOLOLoss
 from main.warm_up import warm_up
 from nets.yolo import Model, WeightInitial
 from main.optimizer import *
+from nets.yolo_net import YoloBody
 from utils.helper_io import check_file, cvt_cfg
 from utils.helper_torch import select_device
 
@@ -85,13 +85,15 @@ def train(train_cfg_file):
     print(plan)
 
     print_title("1. 构造模型")
-    model_cfg = cvt_cfg(check_file(plan.model_cfg))
-    net = Model(model_cfg,
-                plan.anchors,
-                plan.num_labels,
-                image_chan=plan.image_chan,
-                weight_initial=WeightInitial.Random).to(device)
-    net.print_info()
+    # model_cfg = cvt_cfg(check_file(plan.model_cfg))
+    # net = Model(model_cfg,
+    #             plan.anchors,
+    #             plan.num_labels,
+    #             image_chan=plan.image_chan,
+    #             weight_initial=WeightInitial.Random).to(device)
+    # net.print_info()
+
+    net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
     model_train = torch.nn.DataParallel(net)
     # Todo Resume
 
@@ -169,7 +171,7 @@ def train(train_cfg_file):
 
         if mean_val_loss <= min(mean_val_loss_his):
             torch.save(net.state_dict(), plan.save_path)
-            print("Epoch {:05d} Val Loss:{:>.4f} save to {}\r\n".format(epoch, mean_val_loss, path))
+            print("Epoch {:05d} Val Loss:{:>.4f} save to {}\r\n".format(epoch, mean_val_loss, plan.save_path))
         time.sleep(0.2)
 
 
