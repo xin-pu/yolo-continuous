@@ -34,22 +34,17 @@ def cvt_bbox(bbox: Tensor | ndarray, flag: CvtFlag):
     else:
         res_bbox = bbox.clone()
 
-    if flag == CvtFlag.CVT_XXYY_XYXY:
+    if flag == CvtFlag.CVT_XXYY_XYXY or flag == CvtFlag.CVT_XYXY_XXYY:
         res_bbox[:, 1] = bbox[:, 2]
         res_bbox[:, 2] = bbox[:, 1]
     if flag == CvtFlag.CVT_XXYY_XYWH:
-        res_bbox[:, 0] = (bbox[:, 0] + bbox[:, 1]) / 2  # x center
-        res_bbox[:, 1] = (bbox[:, 2] + bbox[:, 3]) / 2  # y center
         res_bbox[:, 2] = bbox[:, 1] - bbox[:, 0]  # width
         res_bbox[:, 3] = bbox[:, 3] - bbox[:, 2]  # height
-    if flag == CvtFlag.CVT_XYXY_XXYY:
-        res_bbox[:, 1] = bbox[:, 2]
-        res_bbox[:, 2] = bbox[:, 1]
+        res_bbox[:, 0] = bbox[:, 0] + res_bbox[:, 2] / 2  # x center
+        res_bbox[:, 1] = bbox[:, 2] + res_bbox[:, 3] / 2  # y center
     if flag == CvtFlag.CVT_XYXY_XYWH:
-        res_bbox[:, 0] = (bbox[:, 0] + bbox[:, 2]) / 2  # x center
-        res_bbox[:, 1] = (bbox[:, 1] + bbox[:, 3]) / 2  # y center
-        res_bbox[:, 2] = bbox[:, 2] - bbox[:, 0]  # width
-        res_bbox[:, 3] = bbox[:, 3] - bbox[:, 1]  # height
+        res_bbox[:, 2:4] = bbox[:, 2:4] - bbox[:, 0:2]
+        res_bbox[:, 0:2] = bbox[:, 0:2] + res_bbox[:, 2:4] / 2
     if flag == CvtFlag.CVT_XYWH_XXYY:
         res_bbox[:, 0] = bbox[:, 0] - bbox[:, 2] / 2  # top left x
         res_bbox[:, 1] = bbox[:, 0] + bbox[:, 2] / 2  # bottom right x
@@ -210,7 +205,7 @@ def make_grid(nx=20, ny=20):
 
 
 if __name__ == "__main__":
-    _xxyy = torch.asarray([[1, 2, 3, 4]]).float()
+    _xxyy = torch.asarray([[1, 2, 3, 5]]).float()
 
     print("XXYY:{}".format(_xxyy))
     _xyxy = cvt_bbox(_xxyy, CvtFlag.CVT_XXYY_XYXY)
@@ -226,5 +221,5 @@ if __name__ == "__main__":
 
     _xxyy = cvt_bbox(_xyxy, CvtFlag.CVT_XYXY_XXYY)
     _xywh = cvt_bbox(_xyxy, CvtFlag.CVT_XYXY_XYWH)
-    print("XYXY:{}".format(_xxyy))
+    print("XXYY:{}".format(_xxyy))
     print("XYWH:{}".format(_xywh))

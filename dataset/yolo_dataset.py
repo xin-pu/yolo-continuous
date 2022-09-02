@@ -45,6 +45,7 @@ class YoloDataset(Dataset):
         img: [C,H,W]
         tar: (Label, X1,Y1,X2,Y2)
         """
+
         line = self.index_file[index].split()
         image_file = line[0]
 
@@ -65,10 +66,10 @@ class YoloDataset(Dataset):
         # Step 4 调整
         label = torch.from_numpy(label)
 
-        final_xywh = cvt_bbox(final_xyxy, CvtFlag.CVT_XYXY_XYWH)  #
+        final_xyxy[:, [1, 3]] /= final_img.shape[0]
+        final_xyxy[:, [0, 2]] /= final_img.shape[1]
+        final_xywh = cvt_bbox(final_xyxy, CvtFlag.CVT_XYXY_XYWH)
         final_xywh = torch.from_numpy(final_xywh)
-        final_xywh[:, [1, 3]] /= final_img.shape[0]
-        final_xywh[:, [0, 2]] /= final_img.shape[1]
 
         # Step 5 拼接最终 [ImageIndex]_[label]_[XYWH]
         labels_out = torch.zeros((label_box.shape[0], 6))
