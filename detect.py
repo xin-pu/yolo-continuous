@@ -226,30 +226,33 @@ def resize_image(image, size, letterbox_image):
     return new_image
 
 
+def prepare_model(plan: TrainPlan):
+    net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
+    net.load_state_dict(torch.load(plan.save_path))
+    # net = net.fuse().eval()
+    return net
+
+
 if __name__ == "__main__":
     _train_cfg_file = check_file(r"cfg/coco_train.yaml")
-    plan = TrainPlan(_train_cfg_file)
-    device = select_device(device='0')
+    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\dog.jpg"
 
-    model_cfg = cvt_cfg(check_file(plan.model_cfg))
+    _plan = TrainPlan(_train_cfg_file)
+    _device = select_device(device=_plan.device)
+    _net = prepare_model(_plan).to(_device)
+    _input_shape = (_plan.image_size, _plan.image_size)
+    _num_labels = _plan.num_labels
 
-    path = os.path.join(plan.save_dir, "{}.pt".format(plan.save_name))
-    ckpt = torch.load(path, map_location=device)
-    net = YoloBody(plan.anchors_mask, 80, 'l').cuda()
-    net.load_state_dict(torch.load(r"resource\yolov7_weights.pth"))
-    net = net.fuse().eval()
-
-    image_file = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\OIP-C.png"
-    image = Image.open(image_file)
+    image = Image.open(_test_img)
     image_shape = np.array(np.shape(image)[0:2])
-    image_data = resize_image(image, (plan.image_size, plan.image_size), True)
+    image_data = resize_image(image, (_plan.image_size, _plan.image_size), True)
     image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
 
     with torch.no_grad():
-        images = torch.from_numpy(image_data).to(device)
-        outputs = net(images)
-        anchors = np.asarray(plan.anchors).reshape(-1, 2)
-        anchors_mask = plan.anchors_mask
+        images = torch.from_numpy(image_data).to(_device)
+        outputs = _net(images)
+        anchors = np.asarray(_plan.anchors).reshape(-1, 2)
+        anchors_mask = _plan.anchors_mask
         outputs = decode_box(outputs, anchors, anchors_mask, 80, image_size=(640, 640))
         all_outputs = torch.cat(outputs, 1)
         results = non_max_suppression(all_outputs, 80, (640, 640), image_shape,
@@ -265,7 +268,7 @@ if __name__ == "__main__":
         thickness = int(max((image.size[0] + image.size[1]) // np.mean(640), 1))
 
         for i, c in list(enumerate(top_label)):
-            predicted_class = plan.labels[int(c)]
+            predicted_class = _plan.labels[int(c)]
             box = top_boxes[i]
             score = top_conf[i]
 
