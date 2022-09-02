@@ -5,11 +5,14 @@ import numpy as np
 import torch
 from PIL import ImageFont, ImageDraw
 from PIL import Image
+from PIL.Image import Resampling
 from torchvision.ops import nms
 
 from cfg.train_plan import TrainPlan
 from image_enhance.letter_box import LetterBox
 from nets.yolo_net import YoloBody
+from utils.bbox import BBoxType
+from utils.helper_cv import show_bbox
 from utils.helper_io import cvt_cfg, check_file
 from utils.helper_torch import select_device
 
@@ -218,11 +221,11 @@ def resize_image(image, size, letterbox_image):
         nw = int(iw * scale)
         nh = int(ih * scale)
 
-        image = image.resize((nw, nh), Image.BICUBIC)
+        image = image.resize((nw, nh), Resampling.BICUBIC)
         new_image = Image.new('RGB', size, (128, 128, 128))
         new_image.paste(image, ((w - nw) // 2, (h - nh) // 2))
     else:
-        new_image = image.resize((w, h), Image.BICUBIC)
+        new_image = image.resize((w, h), Resampling.BICUBIC)
     return new_image
 
 
@@ -233,66 +236,46 @@ def prepare_model(plan: TrainPlan):
     return net
 
 
+def prepare_test_image(image_path):
+    image = Image.open(image_path)
+    image_data = resize_image(image, (_plan.image_size, _plan.image_size), True)
+    image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
+    return image_data, image
+
+
 if __name__ == "__main__":
     _train_cfg_file = check_file(r"cfg/coco_train.yaml")
-    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\dog.jpg"
+    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\002341.jpg"
 
     _plan = TrainPlan(_train_cfg_file)
     _device = select_device(device=_plan.device)
-    _net = prepare_model(_plan).to(_device)
+
     _input_shape = (_plan.image_size, _plan.image_size)
     _num_labels = _plan.num_labels
+    _anchors = np.asarray(_plan.anchors).reshape(-1, 2)
+    _anchors_mask = _plan.anchors_mask
 
-    image = Image.open(_test_img)
-    image_shape = np.array(np.shape(image)[0:2])
-    image_data = resize_image(image, (_plan.image_size, _plan.image_size), True)
-    image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
+    _image_data, _image = prepare_test_image(_test_img)
 
     with torch.no_grad():
-        images = torch.from_numpy(image_data).to(_device)
-        outputs = _net(images)
-        anchors = np.asarray(_plan.anchors).reshape(-1, 2)
-        anchors_mask = _plan.anchors_mask
-        outputs = decode_box(outputs, anchors, anchors_mask, 80, image_size=(640, 640))
+        _net = prepare_model(_plan).to(_device)
+        images = torch.from_numpy(_image_data).to(_device)
+        pred = _net(images)
+
+        outputs = decode_box(pred, _anchors, _anchors_mask, _num_labels, image_size=_input_shape)
         all_outputs = torch.cat(outputs, 1)
-        results = non_max_suppression(all_outputs, 80, (640, 640), image_shape,
+        results = non_max_suppression(all_outputs, _num_labels, _input_shape, np.array(np.shape(_image)[0:2]),
                                       True,
                                       conf_thres=0.5,
                                       nms_thres=0.3)
-        print(results)
 
         top_label = np.array(results[0][:, 6], dtype='int32')
         top_conf = (results[0][:, 4] * results[0][:, 5])
-        top_boxes = results[0][:, :4]
+        top_boxes_yxyx = results[0][:, :4]
+        top_boxes_xyxy = np.empty_like(top_boxes_yxyx)
+        top_boxes_xyxy[..., 0] = top_boxes_yxyx[..., 1]
+        top_boxes_xyxy[..., 1] = top_boxes_yxyx[..., 0]
+        top_boxes_xyxy[..., 2] = top_boxes_yxyx[..., 3]
+        top_boxes_xyxy[..., 3] = top_boxes_yxyx[..., 2]
 
-        thickness = int(max((image.size[0] + image.size[1]) // np.mean(640), 1))
-
-        for i, c in list(enumerate(top_label)):
-            predicted_class = _plan.labels[int(c)]
-            box = top_boxes[i]
-            score = top_conf[i]
-
-            top, left, bottom, right = box
-
-            top = max(0, np.floor(top).astype('int32'))
-            left = max(0, np.floor(left).astype('int32'))
-            bottom = min(image.size[1], np.floor(bottom).astype('int32'))
-            right = min(image.size[0], np.floor(right).astype('int32'))
-
-            label = '{} {:.2f}'.format(predicted_class, score)
-            draw = ImageDraw.Draw(image)
-            label_size = draw.textsize(label)
-            label = label.encode('utf-8')
-            print(label, top, left, bottom, right)
-
-            if top - label_size[1] >= 0:
-                text_origin = np.array([left, top - label_size[1]])
-            else:
-                text_origin = np.array([left, top + 1])
-
-            for i in range(thickness):
-                draw.rectangle([left + i, top + i, right - i, bottom - i])
-            draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)])
-            draw.text(text_origin, str(label, 'UTF-8'), fill=(0, 0, 0))
-            del draw
-        image.show()
+        show_bbox(cv2.imread(_test_img), top_boxes_xyxy, bbox_mode=BBoxType.XYXY)

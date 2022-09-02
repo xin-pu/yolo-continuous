@@ -65,6 +65,6 @@ def show_bbox(image: ndarray, bbox: ndarray, bbox_mode=BBoxType.XYXY):
     for box in _bbox:
         pt1 = (int(box[0]), int(box[1]))
         pt2 = (int(box[2]), int(box[3]))
-        cv2.rectangle(image, pt1, pt2, (0, 123, 255), 2)
+        cv2.rectangle(image, pt1, pt2, (0, 123, 255), 1)
     cv2.imshow("show", image)
     cv2.waitKey()
