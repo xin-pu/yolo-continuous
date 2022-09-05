@@ -32,8 +32,8 @@ class YOLOLoss(nn.Module):
         self.stride = [32, 16, 8]
 
         self.box_ratio = 0.05
-        self.obj_ratio = 0.7
-        self.cls_ratio = 0.3
+        self.obj_ratio = 1 * (input_shape[0] * input_shape[1]) / (640 ** 2)
+        self.cls_ratio = 0.5 * (num_classes / 80)
         self.threshold = 4
 
         self.cp, self.cn = smooth_bce(eps=label_smoothing)

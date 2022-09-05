@@ -33,8 +33,8 @@ fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
 
 adam: False # use torch.optim.Adam() optimizer
 decay: Cosine # NA,Linear, InverseTime,Exponential,Natural_Exponential,Cosine
-lrI: 0.001 # initial learning rate (SGD=1E-2, Adam=1E-3)
-lrF: 0.01  # final OneCycleLR learning rate (lr0 * lrf)
+lrI: 0.01 # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
 warmup: True
@@ -46,4 +46,4 @@ warmup_bias_lr: 0.1  # warmup initial bias lr
 
 resume: True
 save_dir: F:\SaveModels\Yolo
-save_name: raccoon_2
+save_name: raccoon

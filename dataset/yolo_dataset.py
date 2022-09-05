@@ -5,6 +5,8 @@ import torch
 
 from torch.utils.data import Dataset
 from tqdm import tqdm
+
+from cfg.train_plan import TrainPlan
 from dataset.infinite_dataLoader import InfiniteDataLoader
 from main.enhance_package import EnhancePackage
 from utils.bbox import cvt_bbox, CvtFlag
@@ -22,16 +24,16 @@ def collate_fn(batch):
 class YoloDataset(Dataset):
 
     def __init__(self,
-                 data_cfg,
+                 train_plan: TrainPlan,
                  enhance_cfg,
                  train=True):
 
-        self.image_shape = (data_cfg["image_size"], data_cfg["image_size"])
-        with open(data_cfg["train"] if train else data_cfg["val"], encoding='utf-8') as f:
+        self.image_shape = (train_plan.image_size, train_plan.image_size)
+        with open(train_plan.train_indexes if train else train_plan.val_indexes, encoding='utf-8') as f:
             self.index_file = f.readlines()
         self.len = len(self.index_file)
 
-        self.enhance_option = data_cfg["enhance"] if train else False
+        self.enhance_option = train_plan.enhance if train else False
         self.enhance = EnhancePackage(self.image_shape, enhance_cfg)
 
     def __len__(self):
