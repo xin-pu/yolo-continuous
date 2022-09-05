@@ -40,7 +40,7 @@ def get_optimizer(model: Module,
             pg1.append(v.weight)
 
     if adam:
-        optimizer = optim.Adam(pg0, lr=learn_initial, betas=(momentum, 0.999))
+        optimizer = optim.NAdam(pg0, lr=learn_initial, betas=(momentum, 0.999))
     else:
         optimizer = optim.SGD(pg0, lr=learn_initial, momentum=momentum, nesterov=True)
 

@@ -117,9 +117,9 @@ class Model(nn.Module):
         elif self.weight_initial == WeightInitial.Random:
             for m in self.modules():
                 if isinstance(m, (nn.Conv2d, nn.Linear)):
-                    nn.init.normal_(m.weight, 0, 0.01)
+                    nn.init.normal_(m.weight, 0, 0.02)
                 elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                    nn.init.normal_(m.weight, 0, 0.01)
+                    nn.init.normal_(m.weight, 1.0, 0.02)
                     nn.init.constant_(m.bias, 0)
                 elif isinstance(m, (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6)):
                     m.inplace = True

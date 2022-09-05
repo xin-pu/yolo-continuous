@@ -32,8 +32,8 @@ class YOLOLoss(nn.Module):
         self.stride = [32, 16, 8]
 
         self.box_ratio = 0.05
-        self.obj_ratio = 1 * (input_shape[0] * input_shape[1]) / (640 ** 2)
-        self.cls_ratio = 0.5 * (num_classes / 80)
+        self.obj_ratio = 0.7
+        self.cls_ratio = 0.3
         self.threshold = 4
 
         self.cp, self.cn = smooth_bce(eps=label_smoothing)
@@ -99,10 +99,9 @@ class YOLOLoss(nn.Module):
 
                 #   计算匹配上的正样本的分类损失
                 selected_tcls = targets[i][:, 1].long()
-                if self.num_classes > 1:
-                    t = torch.full_like(prediction_pos[:, 5:], self.cn, device=device)
-                    t[range(n), selected_tcls] = self.cp
-                    cls_loss += self.bce_cls(prediction_pos[:, 5:], t)
+                t = torch.full_like(prediction_pos[:, 5:], self.cn, device=device)
+                t[range(n), selected_tcls] = self.cp
+                cls_loss += self.bce_cls(prediction_pos[:, 5:], t)
 
             #  计算目标是否存在的置信度损失  并且乘上每个特征层的比例
             obj_loss += self.bce_obj(prediction[..., 4], target_obj) * self.balance[i]
@@ -415,14 +414,14 @@ class YOLOLoss(nn.Module):
 
 
 if __name__ == "__main__":
-    anchors = np.array([[12, 16, 19, 36, 40, 28],  # P3/8
-                        [36, 75, 76, 55, 72, 146],  # P4/16
-                        [142, 110, 192, 243, 459, 401]]).reshape(-1, 2)
-    loss = YOLOLoss(anchors, 20, (640, 640))
-    pred = [torch.ones(size=(1, 3, 80, 80, 25)).float(),
-            torch.ones(size=(1, 3, 40, 40, 25)).float(),
-            torch.ones(size=(1, 3, 20, 20, 25)).float()]
-    target = torch.asarray([[0, 0.5, 0.5, 0.8, 0.8, 1]]).float()
-    images = torch.ones(size=(1, 3, 640, 640))
-    l = loss(pred, target, images)
-    print(l)
+    _anchors = np.array([[12, 16, 19, 36, 40, 28],  # P3/8
+                         [36, 75, 76, 55, 72, 146],  # P4/16
+                         [142, 110, 192, 243, 459, 401]]).reshape(-1, 2)
+    _loss = YOLOLoss(_anchors, 20, (640, 640))
+    _pred = [torch.ones(size=(1, 3, 80, 80, 25)).float(),
+             torch.ones(size=(1, 3, 40, 40, 25)).float(),
+             torch.ones(size=(1, 3, 20, 20, 25)).float()]
+    _target = torch.asarray([[0, 0.5, 0.5, 0.8, 0.8, 1]]).float()
+    _images = torch.ones(size=(1, 3, 640, 640))
+    _l = _loss(_pred, _target, _images)
+    print(_l)

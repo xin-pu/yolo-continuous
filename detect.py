@@ -8,10 +8,11 @@ from PIL.Image import Resampling
 from torchvision.ops import nms
 
 from cfg.train_plan import TrainPlan
+from nets.yolo import Model, WeightInitial
 from nets.yolo_net import YoloBody
 from utils.bbox import BBoxType
 from utils.helper_cv import show_bbox
-from utils.helper_io import check_file
+from utils.helper_io import check_file, cvt_cfg
 from utils.helper_torch import select_device
 
 
@@ -254,7 +255,7 @@ def prepare_test_image(image_path):
 
 if __name__ == "__main__":
     _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
-    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jpg"
+    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (2).jfif"
 
     _plan = TrainPlan(_train_cfg_file)
     _device = select_device(device=_plan.device)
@@ -275,7 +276,7 @@ if __name__ == "__main__":
         all_outputs = torch.cat(outputs, 1)
         results = non_max_suppression(all_outputs, _num_labels, _input_shape, np.array(np.shape(_image)[0:2]),
                                       True,
-                                      conf_thres=0.2,
+                                      conf_thres=0.5,
                                       nms_thres=0.3)
         print(results)
         if results[0] is not None:

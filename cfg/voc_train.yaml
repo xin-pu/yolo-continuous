@@ -49,4 +49,4 @@ warmup_bias_lr: 0.1  # warmup initial bias lr
 
 resume: True
 save_dir: F:\SaveModels\Yolo\
-save_name: voc.pt
+save_name: voc

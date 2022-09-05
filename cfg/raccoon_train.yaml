@@ -2,7 +2,7 @@ device: 0  # cuda device, i.e. 0 or 0,1,2,3 or cpu
 
 train: F:\Raccoon\train.txt
 val: F:\Raccoon\val.txt
-epochs: 200
+epochs: 1000
 batch_size: 4
 image_size: 640
 image_chan: 3
@@ -14,7 +14,7 @@ workers: 4
 labels: [ "raccoon"]
 
 enhance_cfg: E:\ObjectDetect\yolo-continuous\cfg\enhance\enhance.yaml
-model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7.yaml
+model_cfg: E:\ObjectDetect\yolo-continuous\cfg\net\yolov7-tiny.yaml
 
 
 anchors: [ [ 12,16, 19,36, 40,28 ], [ 36,75, 76,55, 72,146 ] ,  [ 142,110, 192,243, 459,401 ] ]
@@ -33,7 +33,7 @@ fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
 
 adam: False # use torch.optim.Adam() optimizer
 decay: Cosine # NA,Linear, InverseTime,Exponential,Natural_Exponential,Cosine
-lrI: 0.01 # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrI: 0.001 # initial learning rate (SGD=1E-2, Adam=1E-3)
 lrF: 0.01  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
@@ -46,4 +46,4 @@ warmup_bias_lr: 0.1  # warmup initial bias lr
 
 resume: True
 save_dir: F:\SaveModels\Yolo
-save_name: raccoon
+save_name: raccoon_2

@@ -109,18 +109,15 @@ def train(train_cfg_file):
     #             plan.anchors,
     #             plan.num_labels,
     #             image_chan=plan.image_chan,
-    #             weight_initial=WeightInitial.Random).to(device)
+    #             weight_initial=WeightInitial.NA).to(device)
     # net.print_info()
-
-    net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
+    # net.load_state_dict(torch.load(plan.save_path))
+    net = YoloBody(plan.anchors_mask, plan.num_labels, 'l').to(device)
     weights_init(net)
+    # net.load_state_dict(torch.load(plan.save_path))
+
+    #  Todo Resume
     model_path = r"resource/yolov7_weights.pth"
-
-    print('Load weights {}.'.format(model_path))
-
-    # ------------------------------------------------------#
-    #   根据预训练权重的Key和模型的Key进行加载
-    # ------------------------------------------------------#
     model_dict = net.state_dict()
     pretrained_dict = torch.load(model_path, map_location=device)
     load_key, no_load_key, temp_dict = [], [], {}
@@ -134,7 +131,6 @@ def train(train_cfg_file):
     net.load_state_dict(model_dict)
 
     model_train = torch.nn.DataParallel(net)
-    # Todo Resume
 
     print_title("2. 构造优化器")
     optimizer = get_optimizer(net, plan)
@@ -154,7 +150,7 @@ def train(train_cfg_file):
     epochs = plan.epochs
     iterations_each_epoch = len(train_dataloader)
     iterations_limit = max(plan.warmup_max_iter, iterations_each_epoch * plan.warmup_epochs)
-    mean_val_loss_his = []
+    mean_loss_his, mean_val_loss_his = [], []
 
     for epoch in range(0, epochs):
         pbar = tqdm(enumerate(train_dataloader), total=iterations_each_epoch, ncols=120, colour='#FFFFFF')
@@ -193,6 +189,7 @@ def train(train_cfg_file):
                                                                                                      mean_loss,
                                                                                                      get_lr(optimizer))
             pbar.set_description(msg)
+        mean_loss_his.append(mean_loss)
 
         learning_rate_scheduler.step()
 
@@ -208,9 +205,13 @@ def train(train_cfg_file):
         mean_val_loss_his.append(mean_val_loss)
         pbar.close()
 
-        if mean_val_loss <= min(mean_val_loss_his):
+        if mean_loss <= min(mean_loss_his):
             torch.save(net.state_dict(), plan.save_path)
-            print("Epoch {:05d} Val Loss:{:>.4f} save to {}\r\n".format(epoch, mean_val_loss, plan.save_path))
+            print("Epoch {:05d}  Loss:{:>.4f} ,Val Loss:{:>.4f} save to {}\r\n".format(epoch,
+                                                                                       mean_loss,
+                                                                                       mean_val_loss,
+                                                                                       plan.save_path))
+
         time.sleep(0.2)
 
 
