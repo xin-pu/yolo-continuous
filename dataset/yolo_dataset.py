@@ -66,8 +66,9 @@ class YoloDataset(Dataset):
         # Step 4 调整
         label = torch.from_numpy(label)
 
-        final_xyxy[:, [1, 3]] /= final_img.shape[0]
         final_xyxy[:, [0, 2]] /= final_img.shape[1]
+        final_xyxy[:, [1, 3]] /= final_img.shape[0]
+
         final_xywh = cvt_bbox(final_xyxy, CvtFlag.CVT_XYXY_XYWH)
         final_xywh = torch.from_numpy(final_xywh)
 

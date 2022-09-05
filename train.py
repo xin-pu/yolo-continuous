@@ -41,6 +41,25 @@ def copy_attr(a, b, include=(), exclude=()):
             setattr(a, k, v)
 
 
+def weights_init(net, init_type='normal', init_gain=0.02):
+    def init_func(m):
+        classname = m.__class__.__name__
+        if hasattr(m, 'weight') and classname.find('Conv') != -1:
+            if init_type == 'normal':
+                torch.nn.init.normal_(m.weight.data, 0.0, init_gain)
+            elif init_type == 'xavier':
+                torch.nn.init.xavier_normal_(m.weight.data, gain=init_gain)
+            elif init_type == 'kaiming':
+                torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+            elif init_type == 'orthogonal':
+                torch.nn.init.orthogonal_(m.weight.data, gain=init_gain)
+            else:
+                raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
+        elif classname.find('BatchNorm2d') != -1:
+            torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
+            torch.nn.init.constant_(m.bias.data, 0.0)
+
+
 class ModelEMA:
     """ Updated Exponential Moving Average (EMA) from https://github.com/rwightman/pytorch-image-models
     Keeps a moving average of everything in the model state_dict (parameters and buffers)
@@ -94,6 +113,26 @@ def train(train_cfg_file):
     # net.print_info()
 
     net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
+    weights_init(net)
+    model_path = r"resource/yolov7_weights.pth"
+
+    print('Load weights {}.'.format(model_path))
+
+    # ------------------------------------------------------#
+    #   根据预训练权重的Key和模型的Key进行加载
+    # ------------------------------------------------------#
+    model_dict = net.state_dict()
+    pretrained_dict = torch.load(model_path, map_location=device)
+    load_key, no_load_key, temp_dict = [], [], {}
+    for k, v in pretrained_dict.items():
+        if k in model_dict.keys() and np.shape(model_dict[k]) == np.shape(v):
+            temp_dict[k] = v
+            load_key.append(k)
+        else:
+            no_load_key.append(k)
+    model_dict.update(temp_dict)
+    net.load_state_dict(model_dict)
+
     model_train = torch.nn.DataParallel(net)
     # Todo Resume
 
@@ -108,8 +147,8 @@ def train(train_cfg_file):
     print(yolo_loss)
 
     print_title("4. 构造数据集")
-    train_dataloader = get_dataloader(plan.cfg_file, True)
-    test_dataloader = get_dataloader(plan.cfg_file, False)
+    train_dataloader = get_dataloader(plan, True)
+    test_dataloader = get_dataloader(plan, False)
 
     print_title("5. 训练")
     epochs = plan.epochs

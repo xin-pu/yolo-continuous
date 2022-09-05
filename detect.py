@@ -236,8 +236,8 @@ def prepare_model(plan: TrainPlan):
     #             image_chan=plan.image_chan,
     #             weight_initial=WeightInitial.Random)
     net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
-    net.load_state_dict(torch.load(r"E:\ObjectDetect\yolov7_pytorch\logs\best_epoch_weights.pth"))
-    # net.load_state_dict(torch.load(plan.save_path))
+    # net.load_state_dict(torch.load(r"E:\ObjectDetect\yolov7_pytorch\logs\best_epoch_weights.pth"))
+    net.load_state_dict(torch.load(plan.save_path))
     #   Keypoint 不启用 BatchNormalization 和 Dropout，保证BN和dropout不发生变化，pytorch框架会自动把BN和Dropout固定住，不会取平均
     #    而是用训练好的值，不然的话，一旦test的batch_size过小，很容易就会被BN层影响结果。
     # https://blog.csdn.net/wuqingshan2010/article/details/106013660
@@ -254,7 +254,7 @@ def prepare_test_image(image_path):
 
 if __name__ == "__main__":
     _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
-    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (4).jpg"
+    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jpg"
 
     _plan = TrainPlan(_train_cfg_file)
     _device = select_device(device=_plan.device)
@@ -275,7 +275,7 @@ if __name__ == "__main__":
         all_outputs = torch.cat(outputs, 1)
         results = non_max_suppression(all_outputs, _num_labels, _input_shape, np.array(np.shape(_image)[0:2]),
                                       True,
-                                      conf_thres=0.3,
+                                      conf_thres=0.2,
                                       nms_thres=0.3)
         print(results)
         if results[0] is not None:
