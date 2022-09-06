@@ -111,7 +111,7 @@ class YoloDataset(Dataset):
 if __name__ == "__main__":
 
     rank = 1
-    plan = TrainPlan("../cfg/raccoon_train.yaml")
+    plan = TrainPlan("../cfg/raccoon.yaml")
     dataset = YoloDataset(plan, cvt_cfg(plan.enhance_cfg))
     dataloader = InfiniteDataLoader(dataset, batch_size=1,
                                     shuffle=False,

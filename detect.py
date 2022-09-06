@@ -41,8 +41,8 @@ def decode_box(inputs, anchors, anchors_mask, num_labels, image_size=(640, 640))
         x, y, w, h = prediction[..., 0], prediction[..., 1], prediction[..., 2], prediction[..., 3]
 
         #   获得置信度，是否有物体,#   种类置信度
-        conf = torch.sigmoid(prediction[..., 4])
-        pred_cls = torch.sigmoid(prediction[..., 5:])
+        conf = prediction[..., 4]
+        pred_cls = prediction[..., 5:]
 
         FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor
         LongTensor = torch.cuda.LongTensor if x.is_cuda else torch.LongTensor
@@ -198,9 +198,9 @@ def prepare_model(plan: TrainPlan):
     return net
 
 
-def prepare_test_image(image_path):
+def prepare_test_image(image_path, target_size):
     image = cv2.imread(image_path)
-    image_data, _ = LetterBox((_plan.image_size, _plan.image_size), scale_fill_prob=0)(image, np.zeros((0, 4)))
+    image_data, _ = LetterBox(target_size, scale_fill_prob=0)(image, np.zeros((0, 4)))
     image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
     return image_data, image
 
@@ -230,31 +230,33 @@ def show_bbox(image: ndarray, target_boxes):
     cv2.waitKey()
 
 
-if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/raccoon_tiny.yaml")
-    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jfif"
+def predict(cfg_file, image_path, conf_threshold=0.3, nms_threshold=0.3):
+    train_cfg_file = check_file(cfg_file)
+    plan = TrainPlan(train_cfg_file)
 
-    _plan = TrainPlan(_train_cfg_file)
-    _device = select_device(device=_plan.device)
-    _colors = generate_colors(_plan.num_labels)
-    _input_shape = (_plan.image_size, _plan.image_size)
-    _num_labels = _plan.num_labels
-    _anchors = np.asarray(_plan.anchors).reshape(-1, 2)
-    _anchors_mask = _plan.anchors_mask
+    device = select_device(device=plan.device)
 
-    _image_data, _image = prepare_test_image(_test_img)
+    target_shape = (plan.image_size, plan.image_size)
+    num_labels = plan.num_labels
+    anchors = np.asarray(plan.anchors).reshape(-1, 2)
+    anchors_mask = plan.anchors_mask
+
+    colors = generate_colors(plan.num_labels)
+
+    image_data, original_image = prepare_test_image(image_path, target_shape)
+    original_image_shape = np.array(np.shape(original_image)[0:2])
 
     with torch.no_grad():
-        _net = prepare_model(_plan).to(_device)
-    images = torch.from_numpy(_image_data).to(_device)
+        _net = prepare_model(plan).to(device)
+    images = torch.from_numpy(image_data).to(device)
     pred = _net(images)
 
-    outputs = decode_box(pred, _anchors, _anchors_mask, _num_labels, image_size=_input_shape)
+    outputs = decode_box(pred, anchors, anchors_mask, num_labels, image_size=target_shape)
     all_outputs = torch.cat(outputs, 1)
-    results = non_max_suppression(all_outputs, _num_labels, _input_shape, np.array(np.shape(_image)[0:2]),
+    results = non_max_suppression(all_outputs, num_labels, target_shape, original_image_shape,
                                   True,
-                                  conf_thres=0.1,
-                                  nms_thres=0.3)
+                                  conf_thres=conf_threshold,
+                                  nms_thres=nms_threshold)
 
     if results[0] is not None:
         top_label = np.array(results[0][:, 6], dtype='int32')
@@ -274,15 +276,22 @@ if __name__ == "__main__":
             x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
             x1 = max(0, np.floor(x1).astype('int32'))
             y1 = max(0, np.floor(y1).astype('int32'))
-            x2 = min(_image.shape[1], np.floor(x2).astype('int32'))
-            y2 = min(_image.shape[0], np.floor(y2).astype('int32'))
+            x2 = min(original_image.shape[1], np.floor(x2).astype('int32'))
+            y2 = min(original_image.shape[0], np.floor(y2).astype('int32'))
             box = [x1, y1, x2, y2]
 
-            label_name = _plan.labels[label]
-            color = _colors[label]
+            label_name = plan.labels[label]
+            color = colors[label]
             target_box = TargetBox(box, conf, label_name, color)
             print(target_box)
             target_boxes.append(target_box)
             i = i + 1
 
-        show_bbox(_image, target_boxes)
+        show_bbox(original_image, target_boxes)
+
+
+if __name__ == "__main__":
+    predict(r"cfg/raccoon.yaml",
+            r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jfif",
+            conf_threshold=0.02,
+            nms_threshold=0.3)

@@ -33,7 +33,7 @@ def train(train_cfg_file):
                 image_chan=plan.image_chan,
                 weight_initial=WeightInitial.Random).to(device)
     net.print_info()
-    # net.load_state_dict(torch.load(plan.save_path))
+    net.load_state_dict(torch.load(plan.save_path))
 
     #  Todo Resume
     resume = False
@@ -138,5 +138,5 @@ def train(train_cfg_file):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
+    _train_cfg_file = check_file(r"cfg/raccoon.yaml")
     train(_train_cfg_file)
