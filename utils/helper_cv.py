@@ -1,3 +1,5 @@
+import colorsys
+
 import cv2
 import numpy as np
 from numpy import ndarray
@@ -55,16 +57,11 @@ def resize_and_padding(image, new_shape):
     new_image[offseth:offseth + newh, offsetw:offsetw + neww] = image
 
 
-def show_bbox(image: ndarray, bbox: ndarray, bbox_mode=BBoxType.XYXY):
-    image = np.ascontiguousarray(image)
-    _bbox = bbox
-    if bbox_mode == BBoxType.XXYY:
-        _bbox = utils.bbox.cvt_bbox(bbox, CvtFlag.CVT_XXYY_XYXY)
-    if bbox_mode == BBoxType.XYWH:
-        _bbox = utils.bbox.cvt_bbox(bbox, CvtFlag.CVT_XYWH_XYXY)
-    for box in _bbox:
-        pt1 = (int(box[0]), int(box[1]))
-        pt2 = (int(box[2]), int(box[3]))
-        cv2.rectangle(image, pt1, pt2, (0, 123, 255), 1)
-    cv2.imshow("show", image)
-    cv2.waitKey()
+def generate_colors(color_count):
+    hsv_tuples = [(x / color_count, 1., 1.) for x in range(color_count)]
+    colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
+    colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), colors))
+    return colors
+
+
+

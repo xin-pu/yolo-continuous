@@ -61,8 +61,6 @@ class LetterBox(Module):
 
 
 if __name__ == "__main__":
-
-
     test_image_file = r"F:\PASCALVOC\VOC2007_Val\JPEGImages\001919.jpg"
 
     test_image = np.asarray(cv2.imread(test_image_file, flags=cv2.IMREAD_COLOR))  # [H,W,C]

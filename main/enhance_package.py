@@ -30,7 +30,7 @@ class EnhancePackage(Module):
         random_equalize = RandomEqualize(cfg["equalize"])
 
         self.enhance_without_label = [random_equalize]
-        # Todo Remove Random Perspective
+
         self.enhance = [random_hsv,
                         random_flip, ]
 

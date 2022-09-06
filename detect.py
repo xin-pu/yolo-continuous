@@ -3,17 +3,20 @@ import numpy as np
 import torch
 
 from PIL import Image
-from PIL.Image import Resampling
-
+from PIL import ImageDraw, ImageFont
+from numpy import ndarray
 from torchvision.ops import nms
 
+import utils
 from cfg.train_plan import TrainPlan
+from image_enhance.letter_box import LetterBox
 from nets.yolo import Model, WeightInitial
 from nets.yolo_net import YoloBody
-from utils.bbox import BBoxType
-from utils.helper_cv import show_bbox
-from utils.helper_io import check_file, cvt_cfg
+from utils.bbox import BBoxType, CvtFlag
+from utils.helper_cv import generate_colors
+from utils.helper_io import check_file
 from utils.helper_torch import select_device
+from utils.target_box import TargetBox
 
 
 def decode_box(inputs, anchors, anchors_mask, num_labels, image_size=(640, 640)):
@@ -188,6 +191,21 @@ def non_max_suppression(prediction,
     return output
 
 
+def resize_image(image, size):
+    iw, ih = image.size
+    w, h = size
+
+    scale = min(w / iw, h / ih)
+    nw = int(iw * scale)
+    nh = int(ih * scale)
+
+    image = cv2.resize(image, (nw, nh), interpolation=cv2.INTER_LINEAR)
+    new_image = Image.new('RGB', size, (128, 128, 128))
+    new_image.paste(image, ((w - nw) // 2, (h - nh) // 2))
+
+    return new_image
+
+
 def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image):
     box_yx = box_xy[..., ::-1]
     box_hw = box_wh[..., ::-1]
@@ -209,33 +227,13 @@ def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image
     return boxes
 
 
-# ---------------------------------------------------#
-#   对输入图像进行resize
-# ---------------------------------------------------#
-def resize_image(image, size, letterbox_image):
-    iw, ih = image.size
-    w, h = size
-    if letterbox_image:
-        scale = min(w / iw, h / ih)
-        nw = int(iw * scale)
-        nh = int(ih * scale)
-
-
-        image = image.resize((nw, nh), Resampling.BICUBIC)
-        new_image = Image.new('RGB', size, (128, 128, 128))
-        new_image.paste(image, ((w - nw) // 2, (h - nh) // 2))
-    else:
-        new_image = image.resize((w, h), Resampling.BICUBIC)
-    return new_image
-
-
 def prepare_model(plan: TrainPlan):
-    # cfg = cvt_cfg(plan.model_cfg)
-    # net = Model(cfg,
-    #             plan.anchors,
-    #             plan.num_labels,
-    #             image_chan=plan.image_chan,
-    #             weight_initial=WeightInitial.Random)
+    cfg = cvt_cfg(plan.model_cfg)
+    net = Model(cfg,
+                plan.anchors,
+                plan.num_labels,
+                image_chan=plan.image_chan,
+                weight_initial=WeightInitial.Random)
     net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
     # net.load_state_dict(torch.load(r"E:\ObjectDetect\yolov7_pytorch\logs\best_epoch_weights.pth"))
     net.load_state_dict(torch.load(plan.save_path))
@@ -247,19 +245,44 @@ def prepare_model(plan: TrainPlan):
 
 
 def prepare_test_image(image_path):
-    image = Image.open(image_path)
-    image_data = resize_image(image, (_plan.image_size, _plan.image_size), True)
+    image = cv2.imread(image_path)
+    image_data, _ = LetterBox((_plan.image_size, _plan.image_size), scale_fill_prob=0)(image, np.zeros((0, 4)))
     image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
     return image_data, image
 
 
+def show_bbox(image: ndarray, target_boxes):
+    image = np.ascontiguousarray(image)
+    font = cv2.FONT_HERSHEY_PLAIN
+    font_size = 1
+    for target_box in target_boxes:
+        tl, br = target_box.get_topleft(), target_box.get_bottomright()
+        cv2.rectangle(image, tl, br, target_box.color, 1)
+
+        info = '{} {:.2f}'.format(target_box.label, target_box.score)
+
+        label_size, _ = cv2.getTextSize(info, font, font_size, 1)
+        left = target_box.left
+        top = target_box.top
+
+        text_tl = np.array((left, top - label_size[1]) if top > label_size[1] else (left, top + 1))
+        text_br = text_tl + np.array(label_size)
+        text_bl = (text_tl[0], text_br[1])
+
+        cv2.rectangle(image, tuple(text_tl), tuple(text_br), color=target_box.color, thickness=-1)
+        cv2.putText(image, info, text_bl, font, font_size, (255, 255, 255))
+
+    cv2.imshow("Predict", image)
+    cv2.waitKey()
+
+
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/raccoon_train.yaml")
-    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jpg"
+    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
+    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\dog.jpg"
 
     _plan = TrainPlan(_train_cfg_file)
     _device = select_device(device=_plan.device)
-
+    _colors = generate_colors(_plan.num_labels)
     _input_shape = (_plan.image_size, _plan.image_size)
     _num_labels = _plan.num_labels
     _anchors = np.asarray(_plan.anchors).reshape(-1, 2)
@@ -269,24 +292,43 @@ if __name__ == "__main__":
 
     with torch.no_grad():
         _net = prepare_model(_plan).to(_device)
-        images = torch.from_numpy(_image_data).to(_device)
-        pred = _net(images)
+    images = torch.from_numpy(_image_data).to(_device)
+    pred = _net(images)
 
-        outputs = decode_box(pred, _anchors, _anchors_mask, _num_labels, image_size=_input_shape)
-        all_outputs = torch.cat(outputs, 1)
-        results = non_max_suppression(all_outputs, _num_labels, _input_shape, np.array(np.shape(_image)[0:2]),
-                                      True,
-                                      conf_thres=0.2,
-                                      nms_thres=0.3)
-        print(results)
-        if results[0] is not None:
-            top_label = np.array(results[0][:, 6], dtype='int32')
-            top_conf = (results[0][:, 4] * results[0][:, 5])
-            top_boxes_yxyx = results[0][:, :4]
-            top_boxes_xyxy = np.empty_like(top_boxes_yxyx)
-            top_boxes_xyxy[..., 0] = top_boxes_yxyx[..., 1]
-            top_boxes_xyxy[..., 1] = top_boxes_yxyx[..., 0]
-            top_boxes_xyxy[..., 2] = top_boxes_yxyx[..., 3]
-            top_boxes_xyxy[..., 3] = top_boxes_yxyx[..., 2]
+    outputs = decode_box(pred, _anchors, _anchors_mask, _num_labels, image_size=_input_shape)
+    all_outputs = torch.cat(outputs, 1)
+    results = non_max_suppression(all_outputs, _num_labels, _input_shape, np.array(np.shape(_image)[0:2]),
+                                  True,
+                                  conf_thres=0.3,
+                                  nms_thres=0.3)
 
-            show_bbox(cv2.imread(_test_img), top_boxes_xyxy, bbox_mode=BBoxType.XYXY)
+    if results[0] is not None:
+        top_label = np.array(results[0][:, 6], dtype='int32')
+    top_conf = (results[0][:, 4] * results[0][:, 5])
+    top_boxes_yxyx = results[0][:, :4]
+    top_boxes_xyxy = np.empty_like(top_boxes_yxyx)
+    top_boxes_xyxy[..., 0] = top_boxes_yxyx[..., 1]
+    top_boxes_xyxy[..., 1] = top_boxes_yxyx[..., 0]
+    top_boxes_xyxy[..., 2] = top_boxes_yxyx[..., 3]
+    top_boxes_xyxy[..., 3] = top_boxes_yxyx[..., 2]
+
+    i = 0
+    target_boxes = []
+    for label in top_label:
+        box = top_boxes_xyxy[i]
+        conf = top_conf[i]
+        x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+        x1 = max(0, np.floor(x1).astype('int32'))
+        y1 = max(0, np.floor(y1).astype('int32'))
+        x2 = min(_image.shape[1], np.floor(x2).astype('int32'))
+        y2 = min(_image.shape[0], np.floor(y2).astype('int32'))
+        box = [x1, y1, x2, y2]
+
+        label_name = _plan.labels[label]
+        color = _colors[label]
+        target_box = TargetBox(box, conf, label_name, color)
+        print(target_box)
+        target_boxes.append(target_box)
+        i = i + 1
+
+    show_bbox(_image, target_boxes)

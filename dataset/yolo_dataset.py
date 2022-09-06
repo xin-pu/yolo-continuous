@@ -1,3 +1,5 @@
+from random import Random, sample, shuffle
+
 import cv2
 import numpy as np
 import torch.distributed
@@ -32,7 +34,7 @@ class YoloDataset(Dataset):
         with open(train_plan.train_indexes if train else train_plan.val_indexes, encoding='utf-8') as f:
             self.index_file = f.readlines()
         self.len = len(self.index_file)
-
+        self.enhance_cfg = enhance_cfg
         self.enhance_option = train_plan.enhance if train else False
         self.enhance = EnhancePackage(self.image_shape, enhance_cfg)
 
@@ -47,20 +49,15 @@ class YoloDataset(Dataset):
         img: [C,H,W]
         tar: (Label, X1,Y1,X2,Y2)
         """
+        ran = Random()
 
-        line = self.index_file[index].split()
-        image_file = line[0]
-
-        # Step 1 获取原始图像和标签信息
-        img = cv2.imread(image_file)
-        label_box = np.array([np.array(list(map(int, box.split(',')))) for box in line[1:]], dtype=np.float32)
-        is_empty = label_box.shape[0] == 0
-        label = label_box[..., 4] if not is_empty else np.empty(shape=(0, 1))
-        box_xyxy = label_box[..., 0:4] if not is_empty else np.empty(shape=(0, 4))
-
-        # Step 2 图像增广
-        img = np.array(img)
-        final_img, final_xyxy = self.enhance(img, box_xyxy, self.enhance_option)
+        if ran.random() < self.enhance_cfg["mosaic"]:
+            lines = sample(self.index_file, 3)
+            lines.append(self.index_file[index])
+            shuffle(lines)
+            final_img, final_xyxy, label = self.get_mosaic_item(lines)
+        else:
+            final_img, final_xyxy, label = self.get_single_item(self.index_file[index])
 
         # Step 3 归一，并最终确认增广后图像尺寸是否符合输入尺寸，如果不符合，在此直接拉升
         final_img = final_img.astype(np.float32) / 255
@@ -75,12 +72,34 @@ class YoloDataset(Dataset):
         final_xywh = torch.from_numpy(final_xywh)
 
         # Step 5 拼接最终 [ImageIndex]_[label]_[XYWH]
-        labels_out = torch.zeros((label_box.shape[0], 6))
-        if not is_empty:
+        labels_out = torch.zeros((label.shape[0], 6))
+        if not label.shape[0] != 0:
             labels_out[:, 1] = label
             labels_out[:, 2:] = final_xywh
 
         return torch.from_numpy(final_img).permute(2, 0, 1), labels_out
+
+    def get_single_item(self, line):
+        line = line.split()
+        image_file = line[0]
+
+        # Step 1 获取原始图像和标签信息
+        img = cv2.imread(image_file)
+        label_box = np.array([np.array(list(map(int, box.split(',')))) for box in line[1:]], dtype=np.float32)
+        is_empty = label_box.shape[0] == 0
+        label = label_box[..., 4] if not is_empty else np.empty(shape=(0, 1))
+        box_xyxy = label_box[..., 0:4] if not is_empty else np.empty(shape=(0, 4))
+
+        # Step 2 图像增广
+        img = np.array(img)
+        final_img, final_xyxy = self.enhance(img, box_xyxy, self.enhance_option)
+
+        return final_img, final_xyxy, label
+
+    def get_mosaic_item(self, lines):
+        for l in lines:
+            final_img, final_xyxy, label = self.get_single_item(l)
+        return self.get_single_item(lines[0])
 
     def __str__(self):
         info = "-" * 20 + type(self).__name__ + "-" * 20 + "\r\n"
@@ -90,11 +109,11 @@ class YoloDataset(Dataset):
 
 
 if __name__ == "__main__":
-    _data_cfg = cvt_cfg("../cfg/raccoon_train.yaml")
-    _enhance_cfg = cvt_cfg("../cfg/enhance/enhance.yaml")
+
     rank = 1
-    dataset = YoloDataset(_data_cfg, _enhance_cfg)
-    dataloader = InfiniteDataLoader(dataset, batch_size=_data_cfg["batch_size"],
+    plan = TrainPlan("../cfg/raccoon_train.yaml")
+    dataset = YoloDataset(plan, cvt_cfg(plan.enhance_cfg))
+    dataloader = InfiniteDataLoader(dataset, batch_size=1,
                                     shuffle=False,
                                     collate_fn=collate_fn)
 
