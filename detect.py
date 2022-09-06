@@ -2,19 +2,13 @@ import cv2
 import numpy as np
 import torch
 
-from PIL import Image
-from PIL import ImageDraw, ImageFont
 from numpy import ndarray
 from torchvision.ops import nms
-
-import utils
 from cfg.train_plan import TrainPlan
 from image_enhance.letter_box import LetterBox
 from nets.yolo import Model, WeightInitial
-from nets.yolo_net import YoloBody
-from utils.bbox import BBoxType, CvtFlag
 from utils.helper_cv import generate_colors
-from utils.helper_io import check_file
+from utils.helper_io import check_file, cvt_cfg
 from utils.helper_torch import select_device
 from utils.target_box import TargetBox
 
@@ -22,55 +16,32 @@ from utils.target_box import TargetBox
 def decode_box(inputs, anchors, anchors_mask, num_labels, image_size=(640, 640)):
     outputs = []
     for i, input in enumerate(inputs):
-        # -----------------------------------------------#
         #   输入的input一共有三个，他们的shape分别是
         #   batch_size = 1
         #   batch_size, 3 * (4 + 1 + 80), 20, 20
         #   batch_size, 255, 40, 40
         #   batch_size, 255, 80, 80
-        # -----------------------------------------------#
         batch_size = input.size(0)
         input_height = input.size(2)
         input_width = input.size(3)
 
-        # -----------------------------------------------#
-        #   输入为640x640时
-        #   stride_h = stride_w = 32、16、8
-        # -----------------------------------------------#
+        #   输入为640x640时 stride_h = stride_w = 32、16、8
         stride_h = image_size[0] / input_height
         stride_w = image_size[0] / input_width
-        # -------------------------------------------------#
+
         #   此时获得的scaled_anchors大小是相对于特征层的
-        # -------------------------------------------------#
         scaled_anchors = [(anchor_width / stride_w, anchor_height / stride_h) for anchor_width, anchor_height in
                           anchors[anchors_mask[i]]]
 
-        # -----------------------------------------------#
-        #   输入的input一共有三个，他们的shape分别是
-        #   batch_size, 3, 20, 20, 85
-        #   batch_size, 3, 40, 40, 85
-        #   batch_size, 3, 80, 80, 85
-        # -----------------------------------------------#
         prediction = input.view(batch_size, len(anchors_mask[i]),
                                 num_labels + 5, input_height, input_width).permute(0, 1, 3, 4, 2).contiguous()
 
-        # -----------------------------------------------#
-        #   先验框的中心位置的调整参数
-        # -----------------------------------------------#
-        x = torch.sigmoid(prediction[..., 0])
-        y = torch.sigmoid(prediction[..., 1])
-        # -----------------------------------------------#
-        #   先验框的宽高调整参数
-        # -----------------------------------------------#
-        w = torch.sigmoid(prediction[..., 2])
-        h = torch.sigmoid(prediction[..., 3])
-        # -----------------------------------------------#
-        #   获得置信度，是否有物体
-        # -----------------------------------------------#
+        prediction = torch.sigmoid(prediction)
+
+        x, y, w, h = prediction[..., 0], prediction[..., 1], prediction[..., 2], prediction[..., 3]
+
+        #   获得置信度，是否有物体,#   种类置信度
         conf = torch.sigmoid(prediction[..., 4])
-        # -----------------------------------------------#
-        #   种类置信度
-        # -----------------------------------------------#
         pred_cls = torch.sigmoid(prediction[..., 5:])
 
         FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor
@@ -191,21 +162,6 @@ def non_max_suppression(prediction,
     return output
 
 
-def resize_image(image, size):
-    iw, ih = image.size
-    w, h = size
-
-    scale = min(w / iw, h / ih)
-    nw = int(iw * scale)
-    nh = int(ih * scale)
-
-    image = cv2.resize(image, (nw, nh), interpolation=cv2.INTER_LINEAR)
-    new_image = Image.new('RGB', size, (128, 128, 128))
-    new_image.paste(image, ((w - nw) // 2, (h - nh) // 2))
-
-    return new_image
-
-
 def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image):
     box_yx = box_xy[..., ::-1]
     box_hw = box_wh[..., ::-1]
@@ -234,8 +190,6 @@ def prepare_model(plan: TrainPlan):
                 plan.num_labels,
                 image_chan=plan.image_chan,
                 weight_initial=WeightInitial.Random)
-    net = YoloBody(plan.anchors_mask, plan.num_labels, 'l')
-    # net.load_state_dict(torch.load(r"E:\ObjectDetect\yolov7_pytorch\logs\best_epoch_weights.pth"))
     net.load_state_dict(torch.load(plan.save_path))
     #   Keypoint 不启用 BatchNormalization 和 Dropout，保证BN和dropout不发生变化，pytorch框架会自动把BN和Dropout固定住，不会取平均
     #    而是用训练好的值，不然的话，一旦test的batch_size过小，很容易就会被BN层影响结果。
@@ -277,8 +231,8 @@ def show_bbox(image: ndarray, target_boxes):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
-    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\dog.jpg"
+    _train_cfg_file = check_file(r"cfg/raccoon_tiny.yaml")
+    _test_img = r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jfif"
 
     _plan = TrainPlan(_train_cfg_file)
     _device = select_device(device=_plan.device)
@@ -299,36 +253,36 @@ if __name__ == "__main__":
     all_outputs = torch.cat(outputs, 1)
     results = non_max_suppression(all_outputs, _num_labels, _input_shape, np.array(np.shape(_image)[0:2]),
                                   True,
-                                  conf_thres=0.3,
+                                  conf_thres=0.1,
                                   nms_thres=0.3)
 
     if results[0] is not None:
         top_label = np.array(results[0][:, 6], dtype='int32')
-    top_conf = (results[0][:, 4] * results[0][:, 5])
-    top_boxes_yxyx = results[0][:, :4]
-    top_boxes_xyxy = np.empty_like(top_boxes_yxyx)
-    top_boxes_xyxy[..., 0] = top_boxes_yxyx[..., 1]
-    top_boxes_xyxy[..., 1] = top_boxes_yxyx[..., 0]
-    top_boxes_xyxy[..., 2] = top_boxes_yxyx[..., 3]
-    top_boxes_xyxy[..., 3] = top_boxes_yxyx[..., 2]
+        top_conf = (results[0][:, 4] * results[0][:, 5])
+        top_boxes_yxyx = results[0][:, :4]
+        top_boxes_xyxy = np.empty_like(top_boxes_yxyx)
+        top_boxes_xyxy[..., 0] = top_boxes_yxyx[..., 1]
+        top_boxes_xyxy[..., 1] = top_boxes_yxyx[..., 0]
+        top_boxes_xyxy[..., 2] = top_boxes_yxyx[..., 3]
+        top_boxes_xyxy[..., 3] = top_boxes_yxyx[..., 2]
 
-    i = 0
-    target_boxes = []
-    for label in top_label:
-        box = top_boxes_xyxy[i]
-        conf = top_conf[i]
-        x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
-        x1 = max(0, np.floor(x1).astype('int32'))
-        y1 = max(0, np.floor(y1).astype('int32'))
-        x2 = min(_image.shape[1], np.floor(x2).astype('int32'))
-        y2 = min(_image.shape[0], np.floor(y2).astype('int32'))
-        box = [x1, y1, x2, y2]
+        i = 0
+        target_boxes = []
+        for label in top_label:
+            box = top_boxes_xyxy[i]
+            conf = top_conf[i]
+            x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+            x1 = max(0, np.floor(x1).astype('int32'))
+            y1 = max(0, np.floor(y1).astype('int32'))
+            x2 = min(_image.shape[1], np.floor(x2).astype('int32'))
+            y2 = min(_image.shape[0], np.floor(y2).astype('int32'))
+            box = [x1, y1, x2, y2]
 
-        label_name = _plan.labels[label]
-        color = _colors[label]
-        target_box = TargetBox(box, conf, label_name, color)
-        print(target_box)
-        target_boxes.append(target_box)
-        i = i + 1
+            label_name = _plan.labels[label]
+            color = _colors[label]
+            target_box = TargetBox(box, conf, label_name, color)
+            print(target_box)
+            target_boxes.append(target_box)
+            i = i + 1
 
-    show_bbox(_image, target_boxes)
+        show_bbox(_image, target_boxes)

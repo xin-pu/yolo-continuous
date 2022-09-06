@@ -31,7 +31,7 @@ def train(train_cfg_file):
                 plan.anchors,
                 plan.num_labels,
                 image_chan=plan.image_chan,
-                weight_initial=WeightInitial.NA).to(device)
+                weight_initial=WeightInitial.Random).to(device)
     net.print_info()
     # net.load_state_dict(torch.load(plan.save_path))
 
@@ -96,12 +96,12 @@ def train(train_cfg_file):
 
             scaler.scale(loss).backward()
 
-            # Optimize
+            # 优化器更新
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
 
-            # Print
+            # 打印
             loss_sum += loss.item()
             mean_loss = loss_sum / (i + 1)
             msg = "  Epoch:{:03d}/{:03d}\tBatch:{:05d}\tIte:{:05d}\tLoss:{:>.4f}\tlr:{:>.6f}".format(epoch + 1,
