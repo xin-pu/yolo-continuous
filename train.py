@@ -1,3 +1,4 @@
+import os.path
 import time
 
 import numpy as np
@@ -33,24 +34,9 @@ def train(train_cfg_file):
                 image_chan=plan.image_chan,
                 weight_initial=WeightInitial.Random).to(device)
     net.print_info()
-    net.load_state_dict(torch.load(plan.save_path))
 
-    #  Todo Resume
-    resume = False
-    if resume:
-        model_path = r"resource/yolov7_weights.pth"
-        model_dict = net.state_dict()
-        pretrained_dict = torch.load(model_path, map_location=device)
-        load_key, no_load_key, temp_dict = [], [], {}
-        for k, v in pretrained_dict.items():
-            if k in model_dict.keys() and np.shape(model_dict[k]) == np.shape(v):
-                temp_dict[k] = v
-                load_key.append(k)
-            else:
-                no_load_key.append(k)
-        model_dict.update(temp_dict)
-        net.load_state_dict(model_dict)
-        print("Resume from {}".format(model_path))
+    if plan.resume and os.path.exists(plan.save_path):
+        net.load_state_dict(torch.load(plan.save_path))
 
     model_train = torch.nn.DataParallel(net)
 

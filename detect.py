@@ -267,6 +267,6 @@ def predict(cfg_file, image_path, conf_threshold=0.3, nms_threshold=0.3):
 
 if __name__ == "__main__":
     predict(r"cfg/voc_train.yaml",
-            r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\004545.jpg",
-            conf_threshold=0.1,
+            r"F:\PASCALVOC\VOC2007_Val\JPEGImages\003067.jpg",
+            conf_threshold=0.3,
             nms_threshold=0.3)
