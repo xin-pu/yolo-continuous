@@ -6,6 +6,9 @@ Time: 2022/8/25 15:56
 
 import torch.nn as nn
 import torch.nn.functional as f
+
+
+from losses.components.quality_focal_loss import QFocalLoss
 from utils.bbox import *
 
 
@@ -20,7 +23,9 @@ class YOLOLoss(nn.Module):
                  anchors,
                  num_classes,
                  input_shape,
-                 label_smoothing=0):
+                 label_smoothing=0,
+                 fl_gamma=1.5,
+                 fl_alpha=0.25):
         super(YOLOLoss, self).__init__()
 
         self.anchors_mask = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
@@ -38,6 +43,9 @@ class YOLOLoss(nn.Module):
 
         self.cp, self.cn = smooth_bce(eps=label_smoothing)
         self.bce_cls, self.bce_obj, self.gr = nn.BCEWithLogitsLoss(), nn.BCEWithLogitsLoss(), 1
+
+        self.bce_cls = QFocalLoss(self.bce_cls, fl_gamma, fl_alpha)
+        self.bce_obj = QFocalLoss(self.bce_obj, fl_gamma, fl_alpha)
 
     def __call__(self, predictions, targets, images):
 
@@ -136,19 +144,15 @@ class YOLOLoss(nn.Module):
             # -------------------------------------------#
             b_idx = targets[:, 0] == batch_idx
             this_target = targets[b_idx]
-            # -------------------------------------------#
+
             #   如果没有真实框属于该图片则continue
-            # -------------------------------------------#
             if this_target.shape[0] == 0:
                 continue
 
-            # -------------------------------------------#
             #   真实框的坐标进行缩放
-            # -------------------------------------------#
             txywh = this_target[:, 2:6] * images[batch_idx].shape[1]
-            # -------------------------------------------#
+
             #   从中心宽高到左上角右下角
-            # -------------------------------------------#
             txyxy = cvt_bbox(txywh, CvtFlag.CVT_XYWH_XYXY)
 
             pxyxys = []
@@ -161,14 +165,10 @@ class YOLOLoss(nn.Module):
             all_gi = []
             all_anch = []
 
-            # -------------------------------------------#
             #   对三个layer进行循环
-            # -------------------------------------------#
             for i, prediction in enumerate(predictions):
-                # -------------------------------------------#
                 #   b代表第几张图片 a代表第几个先验框
                 #   gj代表y轴，gi代表x轴
-                # -------------------------------------------#
                 b, a, gj, gi = indices[i]
                 idx = (b == batch_idx)
                 b, a, gj, gi = b[idx], a[idx], gj[idx], gi[idx]
@@ -180,16 +180,12 @@ class YOLOLoss(nn.Module):
                 all_anch.append(anch[i][idx])
                 from_which_layer.append(torch.ones(size=(len(b),)) * i)
 
-                # -------------------------------------------#
                 #   取出这个真实框对应的预测结果
-                # -------------------------------------------#
                 fg_pred = prediction[b, a, gj, gi]
                 p_obj.append(fg_pred[:, 4:5])
                 p_cls.append(fg_pred[:, 5:])
 
-                # -------------------------------------------#
                 #   获得网格后，进行解码
-                # -------------------------------------------#
                 grid = torch.stack([gi, gj], dim=1).type_as(fg_pred)
                 pxy = (fg_pred[:, :2].sigmoid() * 2. - 0.5 + grid) * self.stride[i]
                 pwh = (fg_pred[:, 2:4].sigmoid() * 2) ** 2 * anch[i][idx] * self.stride[i]
@@ -197,16 +193,12 @@ class YOLOLoss(nn.Module):
                 pxyxy = cvt_bbox(pxywh, CvtFlag.CVT_XYWH_XYXY)
                 pxyxys.append(pxyxy)
 
-            # -------------------------------------------#
             #   判断是否存在对应的预测框，不存在则跳过
-            # -------------------------------------------#
             pxyxys = torch.cat(pxyxys, dim=0)
             if pxyxys.shape[0] == 0:
                 continue
 
-            # -------------------------------------------#
             #   进行堆叠
-            # -------------------------------------------#
             p_obj = torch.cat(p_obj, dim=0)
             p_cls = torch.cat(p_cls, dim=0)
             from_which_layer = torch.cat(from_which_layer, dim=0)
@@ -216,35 +208,26 @@ class YOLOLoss(nn.Module):
             all_gi = torch.cat(all_gi, dim=0)
             all_anch = torch.cat(all_anch, dim=0)
 
-            # -------------------------------------------------------------#
             #   计算当前图片中，真实框与预测框的重合程度
             #   iou的范围为0-1，取-log后为0~inf
             #   重合程度越大，取-log后越小
             #   因此，真实框与预测框重合度越大，pair_wise_iou_loss越小
-            # -------------------------------------------------------------#
             pair_wise_iou = box_iou(txyxy, pxyxys)
             pair_wise_iou_loss = -torch.log(pair_wise_iou + 1e-8)
 
-            # -------------------------------------------#
-            #   最多二十个预测框与真实框的重合程度
-            #   然后求和，找到每个真实框对应几个预测框
-            # -------------------------------------------#
+            #   最多二十个预测框与真实框的重合程度  然后求和，找到每个真实框对应几个预测框
             top_k, _ = torch.topk(pair_wise_iou, min(20, pair_wise_iou.shape[1]), dim=1)
             dynamic_ks = torch.clamp(top_k.sum(1).int(), min=1)
 
-            # -------------------------------------------#
             #   gt_cls_per_image    种类的真实信息
-            # -------------------------------------------#
             gt_cls_per_image = f.one_hot(this_target[:, 1].to(torch.int64), self.num_classes).float().unsqueeze(
                 1).repeat(1, pxyxys.shape[0], 1)
 
-            # -------------------------------------------#
             #   cls_preds_  种类置信度的预测信息
             #               cls_preds_越接近于1，y越接近于1
             #               y / (1 - y)越接近于无穷大
             #               也就是种类置信度预测的越准
             #               pair_wise_cls_loss越小
-            # -------------------------------------------#
             num_gt = this_target.shape[0]
             cls_preds_ = p_cls.float().unsqueeze(0).repeat(num_gt, 1, 1).sigmoid_() * p_obj.unsqueeze(0).repeat(num_gt,
                                                                                                                 1,
@@ -254,14 +237,10 @@ class YOLOLoss(nn.Module):
                                                                     reduction="none").sum(-1)
             del cls_preds_
 
-            # -------------------------------------------#
             #   求cost的总和
-            # -------------------------------------------#
             cost = (pair_wise_cls_loss + 3.0 * pair_wise_iou_loss)
 
-            # -------------------------------------------#
             #   求cost最小的k个预测框
-            # -------------------------------------------#
             matching_matrix = torch.zeros_like(cost)
             for gt_idx in range(num_gt):
                 _, pos_idx = torch.topk(cost[gt_idx], k=dynamic_ks[gt_idx].item(), largest=False)
@@ -269,10 +248,7 @@ class YOLOLoss(nn.Module):
 
             del top_k, dynamic_ks
 
-            # -------------------------------------------#
-            #   如果一个预测框对应多个真实框
-            #   只使用这个预测框最对应的真实框
-            # -------------------------------------------#
+            #   如果一个预测框对应多个真实框 只使用这个预测框最对应的真实框
             anchor_matching_gt = matching_matrix.sum(0)
             if (anchor_matching_gt > 1).sum() > 0:
                 _, cost_argmin = torch.min(cost[:, anchor_matching_gt > 1], dim=0)
@@ -281,9 +257,7 @@ class YOLOLoss(nn.Module):
             fg_mask_inboxes = matching_matrix.sum(0) > 0.0
             matched_gt_inds = matching_matrix[:, fg_mask_inboxes].argmax(0)
 
-            # -------------------------------------------#
             #   取出符合条件的框
-            # -------------------------------------------#
             from_which_layer = from_which_layer[fg_mask_inboxes]
             all_b = all_b[fg_mask_inboxes]
             all_a = all_a[fg_mask_inboxes]

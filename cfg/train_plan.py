@@ -49,6 +49,8 @@ class TrainPlan(object):
         self.warmup_max_iter = cfg['warmup_max_iter']
         self.warmup_momentum = cfg['warmup_momentum']
         self.warmup_bias_lr = cfg['warmup_bias_lr']
+        self.focal_gamma = cfg['focal_gamma']
+        self.focal_alpha = cfg['focal_alpha']
 
         # 保存信息
         self.resume = cfg['resume']

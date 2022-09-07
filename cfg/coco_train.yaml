@@ -40,7 +40,8 @@ obj: 0.7  # obj loss gain (scale with pixels)
 obj_pw: 1.0  # obj BCELoss positive_weight
 iou_t: 0.20  # IoU training threshold
 anchor_t: 4.0  # anchor-multiple threshold
-fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
+focal_gamma: 1.5 # focal loss gamma (efficientDet default gamma=1.5)
+focal_alpha: 0.25
 
 adam: False # use torch.optim.Adam() optimizer
 decay: Cosine # NA,Linear, InverseTime,Exponential,Natural_Exponential,Cosine

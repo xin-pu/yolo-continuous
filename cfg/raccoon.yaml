@@ -29,12 +29,13 @@ obj: 0.7  # obj loss gain (scale with pixels)
 obj_pw: 1.0  # obj BCELoss positive_weight
 iou_t: 0.20  # IoU training threshold
 anchor_t: 4.0  # anchor-multiple threshold
-fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
+focal_gamma: 1.5 # focal loss gamma (efficientDet default gamma=1.5)
+focal_alpha: 0.25
 
 adam: False # use torch.optim.Adam() optimizer
 decay: Linear # NA,Linear, InverseTime,Exponential,Natural_Exponential,Cosine
-lrI: 0.01 # initial learning rate (SGD=1E-2, Adam=1E-3)
-lrF: 0.01  # final OneCycleLR learning rate (lr0 * lrf)
+lrI: 0.0001 # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrF: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
 warmup: True

@@ -61,7 +61,7 @@ def train(train_cfg_file):
 
     print_title("3. 构造损失函数")
     anchors = np.array(plan.anchors).reshape(-1, 2)
-    yolo_loss = YOLOLoss(anchors, plan.num_labels, (plan.image_size, plan.image_size))
+    yolo_loss = YOLOLoss(anchors, plan.num_labels, (plan.image_size, plan.image_size), fl_gamma=plan.focal_gamma)
     print(yolo_loss)
 
     print_title("4. 构造数据集")
@@ -114,20 +114,19 @@ def train(train_cfg_file):
         mean_loss_his.append(mean_loss)
 
         learning_rate_scheduler.step()
-
-        for j, (images, targets) in enumerate(test_dataloader):
-            images = images.to(device, non_blocking=True).float()
-            targets = targets.to(device)
-            with amp.autocast(enabled=True):
-                pred = net(images)
-                val_loss = yolo_loss(pred, targets, images)
-
-            val_loss_sum += val_loss.item()
-        mean_val_loss = val_loss_sum / (len(test_dataloader))
-        mean_val_loss_his.append(mean_val_loss)
-        pbar.close()
-
         if mean_loss <= min(mean_loss_his):
+            for j, (images, targets) in enumerate(test_dataloader):
+                images = images.to(device, non_blocking=True).float()
+                targets = targets.to(device)
+                with amp.autocast(enabled=True):
+                    pred = net(images)
+                    val_loss = yolo_loss(pred, targets, images)
+
+                val_loss_sum += val_loss.item()
+            mean_val_loss = val_loss_sum / (len(test_dataloader))
+            mean_val_loss_his.append(mean_val_loss)
+            pbar.close()
+
             torch.save(net.state_dict(), plan.save_path)
             print("Epoch {:05d}  Loss:{:>.4f} ,Val Loss:{:>.4f} save to {}\r\n".format(epoch,
                                                                                        mean_loss,
@@ -138,5 +137,5 @@ def train(train_cfg_file):
 
 
 if __name__ == "__main__":
-    _train_cfg_file = check_file(r"cfg/raccoon.yaml")
+    _train_cfg_file = check_file(r"cfg/voc_train.yaml")
     train(_train_cfg_file)

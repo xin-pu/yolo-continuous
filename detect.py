@@ -13,17 +13,26 @@ from utils.helper_torch import select_device
 from utils.target_box import TargetBox
 
 
+def prepare_test_image(image_path, target_size):
+    """
+    图像预处理
+    :param image_path: 图像路径
+    :param target_size: 网络输入尺寸
+    :return:
+    """
+    image = cv2.imread(image_path)
+    image_data, _ = LetterBox(target_size, scale_fill_prob=0)(image, np.zeros((0, 4)))
+    image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
+    return image_data, image
+
+
 def decode_box(inputs, anchors, anchors_mask, num_labels, image_size=(640, 640)):
     outputs = []
-    for i, input in enumerate(inputs):
-        #   输入的input一共有三个，他们的shape分别是
-        #   batch_size = 1
-        #   batch_size, 3 * (4 + 1 + 80), 20, 20
-        #   batch_size, 255, 40, 40
-        #   batch_size, 255, 80, 80
-        batch_size = input.size(0)
-        input_height = input.size(2)
-        input_width = input.size(3)
+    for i, pred in enumerate(inputs):
+        #   输入的input一共有三个，他们的shape分别是   batch_size, 3 * (4 + 1 + num_cls), 20, 20
+        batch_size = pred.size(0)
+        input_height = pred.size(2)
+        input_width = pred.size(3)
 
         #   输入为640x640时 stride_h = stride_w = 32、16、8
         stride_h = image_size[0] / input_height
@@ -33,8 +42,8 @@ def decode_box(inputs, anchors, anchors_mask, num_labels, image_size=(640, 640))
         scaled_anchors = [(anchor_width / stride_w, anchor_height / stride_h) for anchor_width, anchor_height in
                           anchors[anchors_mask[i]]]
 
-        prediction = input.view(batch_size, len(anchors_mask[i]),
-                                num_labels + 5, input_height, input_width).permute(0, 1, 3, 4, 2).contiguous()
+        prediction = pred.view(batch_size, len(anchors_mask[i]), num_labels + 5, input_height, input_width) \
+            .permute(0, 1, 3, 4, 2).contiguous()
 
         prediction = torch.sigmoid(prediction)
 
@@ -47,42 +56,30 @@ def decode_box(inputs, anchors, anchors_mask, num_labels, image_size=(640, 640))
         FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor
         LongTensor = torch.cuda.LongTensor if x.is_cuda else torch.LongTensor
 
-        # ----------------------------------------------------------#
-        #   生成网格，先验框中心，网格左上角
-        #   batch_size,3,20,20
-        # ----------------------------------------------------------#
+        #   生成网格，先验框中心，网格左上角 batch_size,3,20,20
         grid_x = torch.linspace(0, input_width - 1, input_width).repeat(input_height, 1).repeat(
             batch_size * len(anchors_mask[i]), 1, 1).view(x.shape).type(FloatTensor)
         grid_y = torch.linspace(0, input_height - 1, input_height).repeat(input_width, 1).t().repeat(
             batch_size * len(anchors_mask[i]), 1, 1).view(y.shape).type(FloatTensor)
 
-        # ----------------------------------------------------------#
-        #   按照网格格式生成先验框的宽高
-        #   batch_size,3,20,20
-        # ----------------------------------------------------------#
+        #   按照网格格式生成先验框的宽高  batch_size,3,20,20
         anchor_w = FloatTensor(scaled_anchors).index_select(1, LongTensor([0]))
         anchor_h = FloatTensor(scaled_anchors).index_select(1, LongTensor([1]))
         anchor_w = anchor_w.repeat(batch_size, 1).repeat(1, 1, input_height * input_width).view(w.shape)
         anchor_h = anchor_h.repeat(batch_size, 1).repeat(1, 1, input_height * input_width).view(h.shape)
 
-        # ----------------------------------------------------------#
-        #   利用预测结果对先验框进行调整
-        #   首先调整先验框的中心，从先验框中心向右下角偏移
-        #   再调整先验框的宽高。
+        #   利用预测结果对先验框进行调整，首先调整先验框的中心，从先验框中心向右下角偏移，  再调整先验框的宽高。
         #   x 0 ~ 1 => 0 ~ 2 => -0.5, 1.5 => 负责一定范围的目标的预测
         #   y 0 ~ 1 => 0 ~ 2 => -0.5, 1.5 => 负责一定范围的目标的预测
         #   w 0 ~ 1 => 0 ~ 2 => 0 ~ 4 => 先验框的宽高调节范围为0~4倍
         #   h 0 ~ 1 => 0 ~ 2 => 0 ~ 4 => 先验框的宽高调节范围为0~4倍
-        # ----------------------------------------------------------#
         pred_boxes = FloatTensor(prediction[..., :4].shape)
         pred_boxes[..., 0] = x.data * 2. - 0.5 + grid_x
         pred_boxes[..., 1] = y.data * 2. - 0.5 + grid_y
         pred_boxes[..., 2] = (w.data * 2) ** 2 * anchor_w
         pred_boxes[..., 3] = (h.data * 2) ** 2 * anchor_h
 
-        # ----------------------------------------------------------#
         #   将输出结果归一化成小数的形式
-        # ----------------------------------------------------------#
         _scale = torch.Tensor([input_width, input_height, input_width, input_height]).type(FloatTensor)
         output = torch.cat((pred_boxes.view(batch_size, -1, 4) / _scale,
                             conf.view(batch_size, -1, 1), pred_cls.view(batch_size, -1, num_labels)), -1)
@@ -97,10 +94,7 @@ def non_max_suppression(prediction,
                         letterbox_image,
                         conf_thres=0.5,
                         nms_thres=0.4):
-    # ----------------------------------------------------------#
-    #   将预测结果的格式转换成左上角右下角的格式。
-    #   prediction  [batch_size, num_anchors, 85]
-    # ----------------------------------------------------------#
+    #   将预测结果的格式转换成左上角右下角的格式。  prediction  [batch_size, num_anchors, 85]
     box_corner = prediction.new(prediction.shape)
     box_corner[:, :, 0] = prediction[:, :, 0] - prediction[:, :, 2] / 2
     box_corner[:, :, 1] = prediction[:, :, 1] - prediction[:, :, 3] / 2
@@ -110,35 +104,23 @@ def non_max_suppression(prediction,
 
     output = [None for _ in range(len(prediction))]
     for i, image_pred in enumerate(prediction):
-        # ----------------------------------------------------------#
-        #   对种类预测部分取max。
-        #   class_conf  [num_anchors, 1]    种类置信度
-        #   class_pred  [num_anchors, 1]    种类
-        # ----------------------------------------------------------#
+        #   对种类预测部分取max。 class_conf  [num_anchors, 1]    种类置信度  class_pred  [num_anchors, 1]    种类
         class_conf, class_pred = torch.max(image_pred[:, 5:5 + num_classes], 1, keepdim=True)
 
-        # ----------------------------------------------------------#
         #   利用置信度进行第一轮筛选
-        # ----------------------------------------------------------#
         conf_mask = (image_pred[:, 4] * class_conf[:, 0] >= conf_thres).squeeze()
 
-        # ----------------------------------------------------------#
         #   根据置信度进行预测结果的筛选
-        # ----------------------------------------------------------#
         image_pred = image_pred[conf_mask]
         class_conf = class_conf[conf_mask]
         class_pred = class_pred[conf_mask]
         if not image_pred.size(0):
             continue
-        # -------------------------------------------------------------------------#
-        #   detections  [num_anchors, 7]
-        #   7的内容为：x1, y1, x2, y2, obj_conf, class_conf, class_pred
-        # -------------------------------------------------------------------------#
+
+        #   detections  [num_anchors, 7] 7的内容为：x1, y1, x2, y2, obj_conf, class_conf, class_pred
         detections = torch.cat((image_pred[:, :5], class_conf.float(), class_pred.float()), 1)
 
-        # ------------------------------------------#
         #   获得预测结果中包含的所有种类
-        # ------------------------------------------#
         unique_labels = detections[:, -1].cpu().unique()
 
         if prediction.is_cuda:
@@ -196,13 +178,6 @@ def prepare_model(plan: TrainPlan):
     # https://blog.csdn.net/wuqingshan2010/article/details/106013660
     net = net.eval()
     return net
-
-
-def prepare_test_image(image_path, target_size):
-    image = cv2.imread(image_path)
-    image_data, _ = LetterBox(target_size, scale_fill_prob=0)(image, np.zeros((0, 4)))
-    image_data = np.expand_dims(np.transpose((np.array(image_data, dtype='float32') / 255.), (2, 0, 1)), 0)
-    return image_data, image
 
 
 def show_bbox(image: ndarray, target_boxes):
@@ -291,7 +266,7 @@ def predict(cfg_file, image_path, conf_threshold=0.3, nms_threshold=0.3):
 
 
 if __name__ == "__main__":
-    predict(r"cfg/raccoon.yaml",
-            r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\raccoon\Racccon (1).jfif",
-            conf_threshold=0.02,
+    predict(r"cfg/voc_train.yaml",
+            r"E:\OneDrive - II-VI Incorporated\Pictures\Saved Pictures\voc\004545.jpg",
+            conf_threshold=0.1,
             nms_threshold=0.3)
